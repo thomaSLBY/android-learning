@@ -1,0 +1,8 @@
+.idea/
+node_modules/
+.expo/
+.env
+*.apk
+*.aab
+bonus-kotlin/build/
+bonus-kotlin/.gradle/
