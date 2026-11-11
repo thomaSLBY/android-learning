@@ -9,14 +9,14 @@ export interface Competition {
     name: string;
     country?: string;
     logo?: string;
-    season: number;
+    season: string;
     round?: string;
 }
 
 export interface Fixture {
     id: number;
     kickoff: string; // data ISO
-    status: string;
+    status: "Not started" | "First half" | "Second hald" | "Extra time" | "Penalty kickoff" | "Finished";
     competition: Competition;
     home: TeamRef;
     away: TeamRef;
@@ -73,8 +73,8 @@ const italy: TeamRef = {
     name: "Italy"
 };
 
-export const turkey_france: Fixture = {
-    id: "turkey_france",
+export const turkeyVsFrance: Fixture = {
+    id: 1,
     kickoff: "2026-09-25",
     status: "Finished",
     home: turkey,
@@ -83,8 +83,8 @@ export const turkey_france: Fixture = {
     score: { home: 0, away: 1 }
 };
 
-export const belgium_france: Fixture = {
-    id: "belgium_france",
+export const belgiumVsFrance: Fixture = {
+    id: 2,
     kickoff: "2026-09-28",
     status: "Finished",
     home: belgium,
@@ -93,8 +93,8 @@ export const belgium_france: Fixture = {
     score: { home: 0, away: 1 }
 };
 
-export const france_italy: Fixture = {
-    id: "france_italy",
+export const franceVsItaly: Fixture = {
+    id: 3,
     kickoff: "2026-10-02",
     status: "Finished",
     home: france,
@@ -103,8 +103,8 @@ export const france_italy: Fixture = {
     score: { home: 1, away: 1 }
 };
 
-export const france_belgium: Fixture = {
-    id: "france_belgium",
+export const franceVsBelgium: Fixture = {
+    id: 4,
     kickoff: "2026-10-05",
     status: "Finished",
     home: france,
@@ -113,8 +113,8 @@ export const france_belgium: Fixture = {
     score: { home: 4, away: 1 }
 };
 
-export const italy_belgium: Fixture = {
-    id: "italy_belgium",
+export const italyVsBelgium: Fixture = {
+    id: 5,
     kickoff: "2026-09-25",
     status: "Finished",
     home: italy,
@@ -123,8 +123,8 @@ export const italy_belgium: Fixture = {
     score: { home: 0, away: 2 }
 };
 
-export const turkey_italy: Fixture = {
-    id: "turkey_italy",
+export const turkeyVsItaly: Fixture = {
+    id: 6,
     kickoff: "2026-09-28",
     status: "Finished",
     home: turkey,
@@ -133,8 +133,8 @@ export const turkey_italy: Fixture = {
     score: { home: 1, away: 4 }
 };
 
-export const belgium_turkey: Fixture = {
-    id: "belgium_turkey",
+export const belgiumVsTurkey: Fixture = {
+    id: 7,
     kickoff: "2026-10-02",
     status: "Finished",
     home: belgium,
@@ -143,8 +143,8 @@ export const belgium_turkey: Fixture = {
     score: { home: 3, away: 0 }
 };
 
-export const italy_turkey: Fixture = {
-    id: "italy_turkey",
+export const italyVsTurkey: Fixture = {
+    id: 8,
     kickoff: "2026-10-05",
     status: "Finished",
     home: italy,
@@ -184,7 +184,7 @@ const lineup: Lineup = {
     substitues: [truffert]
 }
 
-function playerName(lineups: Lineup[], id: number): string | undefined {
+function playerName(lineups: Lineup[], id: string): string | undefined {
     return lineups
         .flatMap((lineup) => [...lineup.startXI, ...lineup.substitues])
         .find((p) => p.id === id)

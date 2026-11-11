@@ -7,7 +7,7 @@ const isLive: boolean = true;
 const nothing: null = null; // voluntarily left to null;
 let notYet: undefined; // never assigned
 const notes: number[] = [10, 4, 3];
-const shots_by_player: Map<string, number> = {"Mbappé": 4, "Kvara": 7};
+const shots_by_player: Map<string, number> = new Map<string, number>([["Mbappé", 4], ["Kvara", 7]]);
 const is_best_player: boolean = 10 === 10;
 
 interface TeamRef {
@@ -38,7 +38,7 @@ function scoreLabel(f: Fixture): string {
     return `${f.score.home} - ${f.score.away}`;
 }
 
-const isFinished = (status: string): boolean => ["FT", "AET", "PEN"].include(status);
+const isFinished = (status: string): boolean => ["FT", "AET", "PEN"].includes(status);
 
 const greet = (who: string, excited = false) => `Salut ${who}${excited ? " !" : "."}`;
 
