@@ -37,6 +37,28 @@ const teams = {
   529: { id: 529, name: "Barcelona" },
 };
 
+// Compos (comme API-Football) : 11 titulaires + remplaçants. id joueur = teamId * 1000 + numéro.
+const squads = {
+  85: ["4-3-3", ["Donnarumma", "Hakimi", "Marquinhos", "Pacho", "Mendes", "Vitinha", "Neves", "Zaïre-Emery", "Doué", "Dembélé", "Barcola"], ["Safonov", "Hernández", "Lee Kang-in", "Ruiz", "Ramos"]],
+  81: ["3-4-2-1", ["Rulli", "Balerdi", "Cornelius", "Emerson", "Murillo", "Højbjerg", "Kondogbia", "Garcia", "Greenwood", "Gomes", "Aubameyang"], ["De Lange", "Egan-Riley", "O'Riley", "Nadir", "Vermeeren"]],
+  80: ["4-2-3-1", ["Perri", "Maitland-Niles", "Niakhaté", "Mata", "Tagliafico", "Tolisso", "Matić", "Cherki", "Fofana", "Nuamah", "Mikautadze"], ["Descamps", "Kumbedi", "Moreira", "Šulc", "Karabec"]],
+  91: ["4-4-2", ["Köhn", "Vanderson", "Kehrer", "Salisu", "Henrique", "Akliouche", "Camara", "Zakaria", "Minamino", "Biereth", "Embolo"], ["Majecki", "Mawissa", "Golovin", "Ben Seghir", "Ilenikhena"]],
+  40: ["4-2-3-1", ["Alisson", "Frimpong", "Konaté", "Van Dijk", "Kerkez", "Gravenberch", "Mac Allister", "Szoboszlai", "Salah", "Wirtz", "Isak"], ["Mamardashvili", "Gomez", "Jones", "Chiesa", "Ekitiké"]],
+  50: ["4-1-4-1", ["Donnarumma", "Nunes", "Dias", "Guéhi", "O'Reilly", "Rodri", "Foden", "Reijnders", "Cherki", "Doku", "Haaland"], ["Trafford", "Aké", "Kovačić", "Savinho", "Marmoush"]],
+  42: ["4-3-3", ["Raya", "Timber", "Saliba", "Gabriel", "Calafiori", "Rice", "Zubimendi", "Ødegaard", "Saka", "Gyökeres", "Martinelli"], ["Kepa", "White", "Merino", "Eze", "Madueke"]],
+  541: ["4-3-3", ["Courtois", "Carvajal", "Militão", "Huijsen", "Carreras", "Valverde", "Tchouaméni", "Bellingham", "Güler", "Mbappé", "Vinícius Jr"], ["Lunin", "Rüdiger", "Camavinga", "Brahim", "Rodrygo"]],
+  529: ["4-2-3-1", ["Szczęsny", "Koundé", "Araujo", "Cubarsí", "Balde", "De Jong", "Pedri", "Yamal", "Fermín", "Raphinha", "Lewandowski"], ["Peña", "Martínez", "Gavi", "Olmo", "Ferran"]],
+};
+const player = (teamId, name, number) => ({ id: teamId * 1000 + number, name, number });
+const lineupsFor = (f) =>
+  [f.home, f.away].map(({ id }) => {
+    const [formation, xi, subs] = squads[id];
+    return { teamId: id, formation, startXI: xi.map((n, i) => player(id, n, i + 1)), substitutes: subs.map((n, i) => player(id, n, i + 12)) };
+  });
+const allPlayers = () =>
+  Object.keys(squads).flatMap((id) => lineupsFor({ home: { id: Number(id) }, away: { id: Number(id) } })[0])
+    .flatMap((l) => [...l.startXI, ...l.substitutes].map((p) => ({ ...p, teamId: l.teamId })));
+
 const isoDate = (d) => d.toISOString().slice(0, 10);
 const addDays = (d, n) => new Date(d.getTime() + n * 86_400_000);
 
@@ -74,6 +96,21 @@ const notes = {};
 /** summaries[username][fixtureId] = { status, summary } */
 const summaries = {};
 const tokens = new Map(); // token -> username
+/** plans[username] = { plan: "free" | "premium", premiumUntil } — le backend reste la source de vérité. */
+const plans = {};
+const profileOf = (u) => (plans[u] ??= { plan: "free", premiumUntil: null });
+
+// Évènements (comme API-Football) : un remplacement et un carton rouge par match commencé.
+// Piège réaliste : sur un remplacement, le fournisseur met parfois l'entrant dans `assistId` et parfois dans `playerId`.
+function eventsFor(f) {
+  if (f.status === "NS") return [];
+  const [h, a] = [f.home.id, f.away.id];
+  return [
+    { minute: 58, teamId: h, type: "substitution", playerId: h * 1000 + 9, playerName: squads[h][1][8], assistId: h * 1000 + 15, assistName: squads[h][2][3] },
+    { minute: 61, teamId: a, type: "substitution", playerId: a * 1000 + 14, playerName: squads[a][2][2], assistId: a * 1000 + 7, assistName: squads[a][1][6] },
+    { minute: 45, extra: 2, teamId: a, type: "red", playerId: a * 1000 + 4, playerName: squads[a][1][3] },
+  ];
+}
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -126,7 +163,9 @@ const routes = [
   ["GET", /^\/fixtures\/(\d+)$/, async ({ user, params: [id] }) => {
     const f = fixtures.find((x) => x.id === Number(id));
     if (!f) return [404, { error: "fixture_not_found" }];
-    return [200, { fixture: withUserState(user, f), summary: summaries[user]?.[f.id]?.summary ?? null }];
+    // Compo publiée ~1 h avant le coup d'envoi (sinon liste vide, comme en vrai).
+    const published = Date.parse(f.kickoff) - Date.now() < 3_600_000;
+    return [200, { fixture: withUserState(user, f), lineups: published ? lineupsFor(f) : [], events: eventsFor(f), summary: summaries[user]?.[f.id]?.summary ?? null }];
   }],
 
   ["GET", /^\/fixtures\/(\d+)\/notes$/, async ({ user, params: [id] }) => {
@@ -137,15 +176,23 @@ const routes = [
   // PUT idempotent : le client choisit l'id de la note (ULID/UUID) -> rejouable sans doublon.
   ["PUT", /^\/fixtures\/(\d+)\/notes\/([\w-]+)$/, async ({ user, params: [fid, noteId], body }) => {
     if (!fixtures.some((f) => f.id === Number(fid))) return [404, { error: "fixture_not_found" }];
-    if (typeof body?.text !== "string" || !body.text.trim()) return [400, { error: "text_required" }];
+    // Étiquettes rapides ("Perte de balle"…) : 8 max, 40 caractères max chacune.
+    const labels = Array.isArray(body?.labels) ? body.labels.filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim().slice(0, 40)).slice(0, 8) : [];
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    // Une note doit avoir du texte OU au moins une étiquette.
+    if (!text && !labels.length) return [400, { error: "text_or_labels_required" }];
     const map = userNotes(user, Number(fid));
     const now = new Date().toISOString();
     const note = {
       id: noteId,
       fixtureId: Number(fid),
-      text: body.text.trim().slice(0, 2000),
+      text: text.slice(0, 2000),
+      labels,
       minute: body.minute ?? null,
       source: body.source === "voice" ? "voice" : "text",
+      // Tags posés depuis les compos : une équipe et/ou jusqu'à 11 joueurs.
+      teamId: body.teamId ?? null,
+      playerIds: Array.isArray(body.playerIds) ? body.playerIds.slice(0, 11) : [],
       createdAt: map.get(noteId)?.createdAt ?? body.createdAt ?? now,
       updatedAt: now,
     };
@@ -168,6 +215,8 @@ const routes = [
   ["POST", /^\/fixtures\/(\d+)\/summary$/, async ({ user, params: [fid] }) => {
     const f = fixtures.find((x) => x.id === Number(fid));
     const list = [...userNotes(user, Number(fid)).values()];
+    // Freemium : le résumé IA est réservé au plan Premium → 402 Payment Required.
+    if (profileOf(user).plan !== "premium") return [402, { error: "premium_required", message: "This feature requires Premium" }];
     if (!f || !list.length) return [409, { error: "nothing_to_summarize" }];
     (summaries[user] ??= {})[fid] = { status: "pending", summary: null };
     setTimeout(() => {
@@ -184,6 +233,25 @@ const routes = [
       };
     }, 4000);
     return [202, { status: "pending" }];
+  }],
+
+  ["GET", /^\/me$/, async ({ user }) => [200, { ...profileOf(user), currentSeason: 2026 }]],
+
+  // Simule le webhook du store (RevenueCat) : en vrai, c'est le SERVEUR du store qui appelle le backend,
+  // jamais l'app. Body : {"plan":"premium"} ou {"plan":"free"}.
+  ["POST", /^\/dev\/webhook$/, async ({ user, body }) => {
+    const premium = body?.plan === "premium";
+    plans[user] = { plan: premium ? "premium" : "free", premiumUntil: premium ? new Date(Date.now() + 30 * 86_400_000).toISOString() : null };
+    return [200, plans[user]];
+  }],
+
+  // Suppression de compte (obligatoire sur les stores) : efface toutes les données de l'utilisateur.
+  ["DELETE", /^\/me$/, async ({ user }) => {
+    delete notes[user];
+    delete summaries[user];
+    delete plans[user];
+    for (const [t, u] of tokens) if (u === user) tokens.delete(t);
+    return [204];
   }],
 
   ["GET", /^\/me\/matches$/, async ({ user }) => {
@@ -211,6 +279,24 @@ const routes = [
       }
     }
     return [200, { teams: [...counts.values()] }];
+  }],
+
+  ["GET", /^\/me\/players$/, async ({ user }) => {
+    const roster = new Map(allPlayers().map((p) => [p.id, p]));
+    const counts = new Map();
+    for (const [fid, m] of Object.entries(notes[user] ?? {})) {
+      const f = fixtures.find((x) => x.id === Number(fid));
+      const tagged = new Set([...m.values()].flatMap((n) => n.playerIds));
+      for (const pid of tagged) {
+        const p = roster.get(pid);
+        if (!p) continue;
+        const c = counts.get(pid) ?? { playerId: pid, name: p.name, team: teams[p.teamId], matchCount: 0, lastMatchAt: f.kickoff };
+        c.matchCount++;
+        if (f.kickoff > c.lastMatchAt) c.lastMatchAt = f.kickoff;
+        counts.set(pid, c);
+      }
+    }
+    return [200, { players: [...counts.values()] }];
   }],
 
   ["GET", /^\/teams$/, async () => [200, { teams: Object.values(teams) }]],

@@ -23,7 +23,9 @@
 | 11 | [11. Qualité : lint, typecheck, tests, debug](#module-11--qualité--lint-typecheck-tests-debug) | fiabiliser et débugger |
 | 12 | [12. Build & déploiement : EAS, OTA, Play Store](#module-12--build--déploiement--eas-ota-play-store) | livrer un APK / AAB |
 | 13 | [13. Visite guidée de football-view-aggregator](#module-13--visite-guidée-de-football-view-aggregator) | modifier la vraie app en confiance |
-| Bonus | [B. Kotlin & Android natif](#bonus--kotlin--android-natif) | comprendre ce qu'il y a sous le capot |
+| Bonus A | [A. Kotlin & Android natif](#bonus-a--kotlin--android-natif) | comprendre ce qu'il y a sous le capot |
+| Bonus B | [B. Publier sur le Play Store](#bonus-b--publier-sur-le-play-store-et-lapp-store) | passer de l'APK à une app publique |
+| Bonus C | [C. Comptes, abonnements & paiements](#bonus-c--comptes-abonnements--paiements) | monétiser avec un modèle freemium |
 
 **Méthode** : pour chaque module, lis la théorie, tape les exemples (ne copie-colle pas : la mémoire musculaire compte), fais les exercices *avant* d'ouvrir les corrigés (`<details>`). Commit à la fin de chaque exercice (`git commit -m "M4-ex2"`) : tu auras un historique de ta progression.
 
@@ -185,7 +187,15 @@ mkdir -p ~/projects/android-learning/playground-ts && cd $_
 npm init -y && npm i -D typescript tsx @types/node
 npx tsc --init
 ```
-Exécute un fichier avec `npx tsx fichier.ts` (comme `python fichier.py`).
+
+- `npm init -y` : crée un fichier `package.json` contenant le nom, les dépendances et les scripts du nouveau projet. C'est l'équivalent du `pyproject.toml`.
+- `npm i -D typescript tsx @types/node` : installe les 3 paquets dans `node_modules/` et les note dans `package.json`. C'est l'équivalent de `pip install` dans un venv.
+  - `typescript` : compilateur qui vérifie les types
+  - `tsx` : exécute directement un fichier `.ts` - `npx tsx fichier.ts`
+  - `@types/node` : définition des types de Node pour que TypeScript les connaisse
+- `npx tsc --init` : crée un `tsconfig.json` : fichier de config de TypeScript.
+
+**Objectif du module** : créer un fichier TypeScript et l'exécuter avec `npx tsx fichier.ts` (comme `python fichier.py`).
 
 ### 2.1 Variables et types de base
 
@@ -247,6 +257,18 @@ const psg: TeamRef = { id: 85, name: "PSG" };
 
 Ce sont **exactement** les types de `mobile/src/lib/types.ts` dans FVA. Ouvre-le maintenant et lis-le : tu devrais tout comprendre.
 
+*Remarques :*
+- `export interface` : rendre la structure visible par les autres fichiers (car privée par défaut). D'autres les autres fichiers, import la structure avec `import` :
+```ts
+// types.ts
+export interface EntityMatch { ... }   // visible ailleurs
+interface Brouillon { ... }            // utilisable seulement dans types.ts
+
+// team/[id].tsx
+import type { EntityMatch } from "@/lib/types";   // ✅
+import type { Brouillon } from "@/lib/types";     // ❌ erreur : non exporté
+```
+
 ### 2.3 Fonctions
 
 ```ts
@@ -292,6 +314,8 @@ for (const f of fixtures) {                        // for...of (valeurs) ≠ for
 
 ### 2.5 Déstructuration, spread, opérateurs null-safe
 
+`[...startXI, ...substitutes]`: crée une nouvelle liste en copiant les listes *startXI* et *substitutes*.
+
 ```ts
 const { home, away, score } = fixture;            // a, b = ... pour les objets
 const [first, ...rest] = fixtures;                 // first, *rest = fixtures
@@ -306,6 +330,68 @@ const minute = note.minute ?? 0;   // valeur par défaut SEULEMENT si null/undef
 L'**immuabilité** (créer de nouveaux objets plutôt que muter) est fondamentale en React. Retiens `{...obj, champ: val}` et `[...arr, item]`.
 
 ### 2.6 Asynchrone : Promise, async/await
+
+#### Rappel : la programmation asynchrone
+
+**Le problème** : un appel réseau ou une lecture disque prend du temps (200 ms pour une API = une éternité pour un processeur). En code **synchrone**, le programme **attend sans rien faire** :
+
+```python
+r1 = requests.get(url1)   # bloque 200 ms
+r2 = requests.get(url2)   # bloque encore 200 ms  → total 400 ms
+```
+
+Sur mobile, c'est pire : pendant l'attente, l'écran serait **gelé** (pas de scroll, boutons inactifs).
+
+**L'idée** : pendant qu'on **attend** une réponse, on fait **autre chose**. Pas besoin de plusieurs threads : un seul fil d'exécution, qui passe d'une tâche à l'autre à chaque attente.
+
+> Analogie : un serveur de restaurant ne reste pas planté devant la cuisine pendant la cuisson. Il prend d'autres commandes et revient quand le plat est prêt. Un seul serveur, plusieurs tables servies.
+
+| Notion | Définition |
+|---|---|
+| **Boucle d'évènements** (*event loop*) | Le « chef d'orchestre » : tient la liste des tâches en attente et relance chacune quand ce qu'elle attendait est arrivé. |
+| **Fonction `async`** | Fonction qui peut se mettre en pause. L'appeler ne l'exécute pas tout de suite : ça renvoie un « ticket » pour un résultat futur. |
+| **`await`** | « Mets-moi en pause ici jusqu'au résultat, et laisse la boucle faire autre chose pendant ce temps. » |
+| **Future / Promise** | Le « ticket » : objet qui contiendra le résultat plus tard (ou une erreur). Python : *coroutine* / *Task* / *Future*. JS : **Promise**. |
+| **Concurrence ≠ parallélisme** | Async = plusieurs tâches **entrelacées** sur un seul cœur, pendant les attentes d'I/O. N'accélère pas un calcul lourd (pour ça : threads/processus). |
+
+**En Python (asyncio)** :
+
+```python
+import asyncio, aiohttp
+
+async def get(session, url):
+    async with session.get(url) as r:
+        return await r.json()          # pause ici, la boucle fait autre chose
+
+async def main():
+    async with aiohttp.ClientSession() as s:
+        a, b = await asyncio.gather(get(s, url1), get(s, url2))  # les 2 en même temps → ~200 ms
+
+asyncio.run(main())    # ← démarre la boucle, exécute main(), puis arrête la boucle
+```
+
+En Python, l'async est **optionnel** : par défaut tout est synchrone. Il faut **démarrer explicitement** la boucle (`asyncio.run`) et utiliser des librairies compatibles (`aiohttp` au lieu de `requests`).
+
+**En JavaScript / TypeScript** :
+
+```ts
+async function get(url: string) {
+  const r = await fetch(url);          // pause ici
+  return r.json();
+}
+
+const [a, b] = await Promise.all([get(url1), get(url2)]);   // ≈ asyncio.gather
+```
+
+Différences avec Python :
+1. **La boucle tourne toujours** : elle est intégrée au moteur JS (navigateur, Node, Hermes sur le téléphone). Pas d'`asyncio.run`, on écrit `await` directement.
+2. **Tout I/O est asynchrone** : il n'existe pas de `fetch` bloquant. Réseau, disque, SQLite, SecureStore… tout renvoie une `Promise`.
+3. **C'est ce qui garde l'app fluide** : le JS tourne sur un seul fil ; pendant un `await fetch(...)`, ce fil reste libre pour gérer les taps et les animations.
+
+**Pièges fréquents** :
+- **Oublier `await`** → on récupère la `Promise` au lieu du résultat (`console.log` affiche `Promise { <pending> }`).
+- **`await` en série quand on pourrait paralléliser** → deux `await` successifs sur des appels indépendants = 2× le temps. Utiliser `Promise.all`.
+- **Erreurs** → une `Promise` rejetée se rattrape avec `try/catch` autour de l'`await`, comme une exception.
 
 Même concept qu'`asyncio`, mais en JS **tout I/O est asynchrone** et il n'y a pas de `asyncio.run` : la boucle d'évènements tourne toujours.
 
@@ -356,11 +442,64 @@ import type { Fixture } from "./types";   // import de type uniquement, effacé 
 
 > 💡 En POO Python tu fais beaucoup de classes. En React moderne, on utilise **peu de classes** : des fonctions, des objets simples et des modules. FVA n'a quasiment qu'une classe (`ApiError`).
 
+### 2.8 Types utilitaires, `switch`, et validation au runtime
+
+**Types utilitaires** : des « fonctions sur les types » fournies par TypeScript, pour dériver un type d'un autre au lieu de le recopier.
+
+```ts
+type MinuteInput = Pick<Fixture, "status" | "elapsed">;   // seulement ces 2 champs
+type FixtureSansScore = Omit<Fixture, "score">;            // tous les champs sauf score
+type FixturePatch = Partial<Fixture>;                       // tous les champs deviennent optionnels
+type GoalsByTeam = Record<number, number>;                  // dict id → nombre
+```
+
+Exemple réel (`mobile/src/lib/minute.ts` de FVA) :
+```ts
+export function liveMinute(f: Pick<Fixture, "status" | "elapsed">, fetchedAt: number, now = Date.now()): number | null
+```
+Pourquoi `Pick` plutôt que `Fixture` ? La fonction ne demande **que ce dont elle a besoin** : on peut l'appeler (et la tester) avec `{ status: "2H", elapsed: 67 }`, sans fabriquer un match complet.
+
+**`switch`** : l'équivalent de `match/case` (Python 3.10), avec des `case` qui peuvent s'empiler :
+```ts
+switch (f.status) {
+  case "1H":
+  case "2H":           // plusieurs cas → même branche
+    return "en cours";
+  case "HT":
+    return "mi-temps";
+  default:             // ≈ case _:
+    return "autre";
+}
+```
+Avec `return` dans chaque branche, pas besoin de `break`. Sans `return`, **oublier `break` est un bug classique** : l'exécution continue dans le `case` suivant.
+
+**Validation au runtime** : les `interface` **disparaissent à l'exécution**. Un `as Note` sur du JSON reçu ne vérifie rien. Pour des données **non fiables** (corps d'une requête HTTP, fichier, saisie), on valide au runtime avec **zod** — l'équivalent de **Pydantic**. Le backend de FVA le fait (`backend/src/handlers/api.ts`) :
+
+```ts
+import { z } from "zod";
+
+const NoteBody = z.object({
+  text: z.string().trim().max(2000),
+  minute: z.number().int().nullable().optional(),
+  labels: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+}).refine((n) => n.text.length > 0 || (n.labels?.length ?? 0) > 0, {   // règle sur plusieurs champs
+  message: "text or labels required",
+});
+
+type NoteBody = z.infer<typeof NoteBody>;   // le type TS est DÉDUIT du schéma → une seule source de vérité
+
+const parsed = NoteBody.safeParse(JSON.parse(rawBody));
+if (!parsed.success) return { status: 400, body: parsed.error.issues };
+parsed.data.labels;  // typé et validé
+```
+
+Règle : **types TS partout, validation runtime aux frontières** (entrée d'API, données externes) — comme la validation de schéma à l'ingestion d'un pipeline.
+
 ### Exercices (`playground-ts/`)
 
 Lance l'API simulée pour les exercices 2.4 et 2.5.
 
-**Ex 2.1** — `types.ts` : déclare `TeamRef`, `Competition`, `Fixture`, `Note` (`id, fixtureId, text, minute: number|null, source: "text"|"voice", createdAt`). Crée 4 fixtures en dur.
+**Ex 2.1** — `types.ts` : déclare `TeamRef`, `Competition`, `Fixture`, `Note` (`id, fixtureId, text, minute: number|null, source: "text"|"voice", teamId?: number|null, playerIds?: number[], createdAt`), `LineupPlayer` (`id, name, number?`) et `Lineup` (`teamId, formation?, startXI: LineupPlayer[], substitutes: LineupPlayer[]`). Crée 4 fixtures et une compo en dur. Écris `playerName(lineups: Lineup[], id: number): string | undefined`.
 
 **Ex 2.2** — `stats.ts` : écris et teste
 - `goalsFor(fixtures, teamId): number`
@@ -372,6 +511,10 @@ Lance l'API simulée pour les exercices 2.4 et 2.5.
 **Ex 2.4** — `client.ts` : écris `login(username)` (POST `/auth/login`) puis `getFixtures(token, date)` et affiche « Domicile score Extérieur » pour les matchs du jour.
 
 **Ex 2.5** — Écris `withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T>` avec *backoff* exponentiel. Teste contre `FAIL_RATE=0.5 node mock-api/server.mjs`.
+
+**Ex 2.6** — `minute.ts` : écris `minuteLabel(minute: number, status?: string): string` qui renvoie `"67'"`, mais `"45+2'"` si `status === "1H"` et `minute === 47`, `"90+4'"` en 2ᵉ mi-temps au-delà de 90, et `"MT"` à la mi-temps (`"HT"`). Teste au moins 6 cas avec `console.log`.
+
+**Ex 2.7** — `npm i zod` dans `playground-ts/`. Écris le schéma `NoteBody` de la section 2.8, puis valide 4 objets : un avec texte, un avec seulement `labels`, un vide (`{ text: "" }`), un avec 9 étiquettes. Affiche `parsed.success` et les messages d'erreur.
 
 <details><summary>Corrigé Ex 2.2</summary>
 
@@ -450,6 +593,18 @@ for (const f of await withRetry(() => getFixtures(token, today))) {
 (`await` au top-level : ajoute `"type": "module"` dans `package.json`.)
 </details>
 
+<details><summary>Corrigé Ex 2.6</summary>
+
+```ts
+export function minuteLabel(minute: number, status?: string): string {
+  if (status === "1H" && minute > 45) return `45+${minute - 45}'`;
+  if (status === "2H" && minute > 90) return `90+${minute - 90}'`;
+  if (status === "HT") return "MT";
+  return `${minute}'`;
+}
+```
+C'est la fonction de `mobile/src/lib/minute.ts` (qui gère aussi la prolongation `"ET"` → `"120+…"`).
+</details>
 ---
 
 ## Module 3 — React : composants, props, state
@@ -683,6 +838,45 @@ const [text, setText] = useState("");
 />
 ```
 
+### 4.6 Le clavier qui cache le champ de saisie
+
+Sur mobile, le clavier occupe la moitié de l'écran et **recouvre** souvent le champ en bas (le `NoteComposer` de FVA est collé en bas de l'écran match). Solution : un conteneur qui **remonte** le contenu quand le clavier s'ouvre.
+
+FVA utilise `react-native-keyboard-controller`, plus fiable que le `KeyboardAvoidingView` de base de React Native (comportements différents Android/iOS) :
+```tsx
+// _layout.tsx : le provider, une seule fois à la racine
+import { KeyboardProvider } from "react-native-keyboard-controller";
+<KeyboardProvider>{/* … */}</KeyboardProvider>
+
+// match/[id].tsx
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { useHeaderHeight } from "@react-navigation/elements";
+
+const headerHeight = useHeaderHeight();
+<KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
+  <FlatList /* notes */ />
+  <NoteComposer />          {/* reste visible au-dessus du clavier */}
+</KeyboardAvoidingView>
+```
+`keyboardVerticalOffset` = hauteur du header de navigation, sinon le calcul est décalé d'autant. Ce paquet contient du code natif → **development build** nécessaire (pas Expo Go, cf. module 10).
+
+### 4.7 Polices personnalisées & identité de marque
+
+```tsx
+import { useFonts } from "expo-font";
+
+const [loaded] = useFonts({ Baloo2ExtraBold: require("../../assets/fonts/Baloo2-ExtraBold.ttf") });
+const brand = loaded ? { fontFamily: "Baloo2ExtraBold", fontWeight: "normal" as const } : null;   // repli : police système
+
+<Text style={[styles.title, brand]}>Kalpin</Text>
+```
+- `require(...)` d'un fichier = l'**embarquer dans le bundle** (comme les images).
+- Le chargement est **asynchrone** : tant que `loaded` est `false`, on affiche la police système plutôt qu'un écran blanc.
+- `fontWeight: "normal"` : la graisse est déjà dans le fichier « ExtraBold » ; demander `"700"` en plus ferait un faux gras sur Android.
+- Vérifie la **licence** d'une police avant de l'embarquer (FVA livre `LICENSE-Baloo2.txt` à côté).
+
+Les textes de marque sont centralisés dans `mobile/src/lib/brand.ts` (`APP_NAME = "Kalpin"`, `TAGLINE`) : une seule source de vérité pour l'écran de connexion et la fiche du store. (Oui, FVA s'appelle désormais **Kalpin** côté utilisateur.)
+
 ### Exercices
 
 **Ex 4.1** — Reproduis un `MatchRow` propre : logo (placeholder rond), nom domicile, score centré, nom extérieur ; point rouge + minute si `status === "2H"`.
@@ -694,6 +888,10 @@ const [text, setText] = useState("");
 **Ex 4.4** — Crée `src/lib/theme.ts` avec des couleurs light/dark et un hook `useTheme()`. Passe ton téléphone en mode sombre pour tester.
 
 **Ex 4.5** — Composant `NoteComposer` : `TextInput` multi-lignes + champ minute numérique (`keyboardType="number-pad"`) + bouton « Ajouter » désactivé si texte vide. Les notes s'affichent en dessous (state local).
+
+**Ex 4.6** — Place ton `NoteComposer` en bas de l'écran match, sous une `FlatList`. Ouvre le clavier : le champ est-il caché ? Corrige avec un `KeyboardAvoidingView` (celui de React Native d'abord, en Expo Go ; celui de `react-native-keyboard-controller` après ton development build du module 10).
+
+**Ex 4.7** — Choisis une police sur Google Fonts (licence OFL), mets le `.ttf` dans `assets/fonts/`, et applique-la au titre de l'app avec `useFonts`. Crée `src/lib/brand.ts` avec le nom et le slogan de ton app.
 
 <details><summary>Corrigé Ex 4.4</summary>
 
@@ -781,6 +979,30 @@ import { Redirect } from "expo-router";
 if (!user) return <Redirect href="/sign-in" />;
 ```
 
+### 5.5 Routes protégées : `Stack.Protected` (la méthode de FVA)
+
+Plutôt que des `<Redirect>` dispersés dans chaque écran, Expo Router permet de déclarer **quels écrans existent selon une condition**, directement dans le layout racine :
+
+```tsx
+// mobile/src/app/_layout.tsx (simplifié)
+const { status } = useAuth();
+if (status === "loading") return null;          // splash screen encore affiché
+
+<Stack>
+  <Stack.Protected guard={status === "signedIn"}>
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="match/[id]" />
+    <Stack.Screen name="premium" options={{ presentation: "modal" }} />
+  </Stack.Protected>
+  <Stack.Protected guard={status === "signedOut"}>
+    <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+  </Stack.Protected>
+</Stack>
+```
+Quand `guard` passe à `false`, les écrans du groupe deviennent **inaccessibles** et l'utilisateur est renvoyé vers le premier écran accessible. Se déconnecter = changer `status` → l'app bascule toute seule sur `sign-in`. Encore « UI = f(état) », appliqué à la navigation. Analogie : des *policies* IAM déclaratives plutôt que des `if` dans chaque Lambda.
+
+**Routes typées** : `"experiments": { "typedRoutes": true }` dans `app.json` → Expo génère les types de toutes tes routes ; `router.push("/mtach/1")` (faute de frappe) devient une **erreur de compilation**.
+
 ### Exercices
 
 **Ex 5.1** — Mets en place la structure : onglets « Matchs » et « Mes notes », écran `match/[id]`.
@@ -793,7 +1015,9 @@ if (!user) return <Redirect href="/sign-in" />;
 
 **Ex 5.5** — Ajoute un écran modal `about` (`presentation: "modal"`) ouvert depuis un bouton du header.
 
-**Ex 5.6 (lecture)** — Ouvre `football-view-aggregator/mobile/src/app/` et dessine l'arbre de navigation de FVA sur papier. Quel fichier gère la redirection vers `sign-in` ?
+**Ex 5.6 (lecture)** — Ouvre `football-view-aggregator/mobile/src/app/` et dessine l'arbre de navigation de FVA sur papier. Quel fichier gère la redirection vers `sign-in` ? (Indice : cherche `Stack.Protected`.)
+
+**Ex 5.7** — Active `typedRoutes`, relance Metro, puis écris volontairement `router.push("/mtach/1")` : vérifie que `npx tsc --noEmit` le refuse.
 
 ---
 
@@ -840,7 +1064,145 @@ C'est ce que fait `mobile/src/lib/auth.tsx`.
 
 L'outbox de FVA vit hors de React (module avec des `listeners`) et est exposée via `useSyncExternalStore(subscribe, getSnapshot)`. Pattern *observer* classique — tu le reverras au module 9.
 
-### 6.5 Organisation du code (convention FVA)
+### 6.5 Remonter l'état (*lifting state up*) : l'exemple des compos de FVA
+
+Dans l'écran match de FVA, deux composants **frères** doivent partager une information :
+- `LineupPanel` affiche les deux compos ; on **touche** une équipe ou des joueurs pour les « taguer » ;
+- `NoteComposer` affiche ces tags sous forme de **puces** supprimables, et la note envoyée les contient (`teamId`, `playerIds`).
+
+Deux frères ne peuvent pas se parler directement. La règle React : **on place l'état dans leur plus proche parent commun** (ici l'écran `match/[id].tsx`), qui le passe aux deux via les props, avec des callbacks pour le modifier.
+
+```
+                 match/[id].tsx  ← possède l'état : teamTag, playerTags
+                 │                                  │
+   props : selectedTeamId, selectedPlayerIds        props : tags, onRemoveTag
+           onToggleTeam, onTogglePlayer             │
+                 ▼                                  ▼
+           LineupPanel                        NoteComposer
+   (affiche, remonte les « taps »)     (affiche les puces, remonte « supprimer »)
+```
+
+Extrait simplifié de `mobile/src/app/match/[id].tsx` :
+```tsx
+const [teamTag, setTeamTag] = useState<number | null>(null);   // une seule équipe max
+const [playerTags, setPlayerTags] = useState<number[]>([]);     // plusieurs joueurs
+
+<LineupPanel
+  selectedTeamId={teamTag}
+  selectedPlayerIds={playerTags}
+  // Toucher l'équipe déjà sélectionnée la désélectionne (toggle)
+  onToggleTeam={(id) => setTeamTag((cur) => (cur === id ? null : id))}
+  // Ajoute/retire le joueur, 11 max — toujours en créant un NOUVEAU tableau
+  onTogglePlayer={(id) =>
+    setPlayerTags((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 11 ? cur : [...cur, id]))}
+/>
+
+// À l'envoi : les tags partent avec la note, puis on remet à zéro
+const submit = (n: ComposerSubmit) => {
+  enqueue({ kind: "upsert", noteId: ulid(), fixtureId, body: { ...n, teamId: teamTag, playerIds: playerTags, /* … */ } });
+  setTeamTag(null);
+  setPlayerTags([]);
+};
+```
+
+Points à retenir :
+- `LineupPanel` est un composant **« contrôlé »** / « bête » (*presentational*) : il ne possède **aucun** état métier, il affiche ce qu'on lui donne et signale les taps. Il est donc réutilisable et facile à tester.
+- On ne stocke que des **ids** dans l'état ; les noms affichés sont **dérivés** avec `useMemo` (une `Map` id → nom construite depuis les compos) — comme une jointure plutôt qu'une donnée dupliquée.
+- **Édition d'une note** : `startEdit` recharge `teamTag`/`playerTags` depuis la note → le panneau se re-surligne tout seul, puisque l'écran = f(état).
+- Pourquoi c'est utile : la note n'a pas besoin de dire « Dembélé a… » ; le tag rattache la note au joueur, ce qui alimente sa page (`player/[id]`) et le résumé IA par joueur.
+
+### 6.6 Le temps comme état : la minute de jeu en direct
+
+L'API ne renvoie la minute (`elapsed`) qu'à chaque rafraîchissement (~30 s). Pour qu'elle **avance seule** à l'écran, FVA la calcule sur le téléphone (`mobile/src/lib/minute.ts`) :
+
+> minute affichée = dernière minute connue + minutes écoulées depuis la réception, **figée** à la mi-temps, plafonnée à +15 min de temps additionnel.
+
+**1. Une fonction pure, avec `now` injecté** :
+```ts
+export function liveMinute(f: Pick<Fixture, "status" | "elapsed">, fetchedAt: number, now = Date.now()): number | null {
+  if (f.elapsed == null) return null;
+  const drift = Math.max(0, Math.floor((now - fetchedAt) / 60_000));   // minutes depuis le fetch
+  switch (f.status) {
+    case "1H": case "2H": case "ET": case "LIVE":
+      return Math.min(f.elapsed + drift, (f.status === "1H" ? 45 : f.status === "2H" ? 90 : 120) + 15);
+    default:
+      return f.elapsed;   // HT, pause… : horloge arrêtée
+  }
+}
+```
+`now = Date.now()` est un **paramètre par défaut** : en production on ne le passe pas ; en test on passe une heure fixe → résultat déterministe. (Comme injecter une date de traitement dans un job batch au lieu d'appeler `datetime.now()` en dur.)
+
+**2. Un hook « horloge »** : l'écran ne se re-rend que si un **état** change. Le temps qui passe n'en est pas un… alors on en fait un :
+```ts
+export function useNow(intervalMs = 10_000): number {
+  const [now, setNow] = useState(() => Date.now());   // initialiseur paresseux : appelé une seule fois
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+```
+Toutes les 10 s, `now` change → re-rendu → minute recalculée.
+
+**3. `dataUpdatedAt` de React Query** : l'heure (ms) de réception de la donnée — c'est notre `fetchedAt`, fourni gratuitement :
+```tsx
+const now = useNow();
+const currentMinute = isLive(fixture) ? liveMinute(fixture, fixtureQ.dataUpdatedAt, now) : null;
+```
+`currentMinute` n'est **pas** dans un `useState` : c'est une **valeur dérivée** recalculée à chaque rendu (cf. 3.6).
+
+### 6.7 Un état à trois valeurs : figer la minute au premier geste
+
+Tu commences une note à la 67ᵉ, tu l'envoies à la 69ᵉ : elle doit dire **67'**. FVA verrouille donc la minute **au premier geste** (tap sur un joueur, une étiquette, une frappe, le micro) :
+
+```ts
+// undefined = pas encore capturée · null = capturée, pas de minute (match pas en direct) · number = figée
+const [draftMinute, setDraftMinute] = useState<number | null | undefined>(undefined);
+
+const captureMinute = () => {
+  if (!editing && draftMinute === undefined) setDraftMinute(currentMinute);   // une seule fois
+};
+const stampedMinute = editing ? editing.minute : draftMinute !== undefined ? draftMinute : currentMinute;
+// à l'envoi : minute: stampedMinute ?? null, puis setDraftMinute(undefined) pour la note suivante
+```
+
+La distinction `undefined` / `null` mise à profit : `null` = « on a regardé, il n'y en avait pas », `undefined` = « on n'a pas encore regardé ». D'où `=== undefined` (et **pas** `== null`, qui confondrait les deux).
+
+`NoteComposer` reçoit un callback **`onActivity`** qu'il appelle à chaque interaction, et affiche la minute qui sera tamponnée (prop `minuteLabel`, ex. `"67'"`). Encore le *lifting state up* : l'écran possède l'état, le composant signale les évènements.
+
+### 6.8 Étiquettes rapides (*quick labels*)
+
+Pour noter vite au stade, `NoteComposer` propose une rangée horizontale d'étiquettes (« Perte de balle », « Passe clé »…). Une note peut n'avoir **que** des étiquettes, sans texte.
+
+```tsx
+export const QUICK_LABELS = ["Bon placement", "Perte de balle", "Dribble réussi", /* … */];
+
+const [labels, setLabels] = useState<string[]>(editing?.labels ?? []);
+const toggleLabel = (label: string) =>
+  setLabels((cur) => (cur.includes(label) ? cur.filter((l) => l !== label) : cur.length >= 8 ? cur : [...cur, label]));
+
+<ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+  {QUICK_LABELS.map((label) => {
+    const on = labels.includes(label);
+    return (
+      <Pressable key={label} onPress={() => toggleLabel(label)} accessibilityState={{ selected: on }}
+        style={{ backgroundColor: on ? t.text : t.cardAlt }}>
+        <T color={on ? t.card : t.text}>{label}</T>
+      </Pressable>
+    );
+  })}
+</ScrollView>
+```
+
+Notions :
+- même idiome *toggle* + plafond que les joueurs tagués (8 étiquettes max) ;
+- `ScrollView horizontal` suffit ici (liste **courte et fixe**), pas besoin de `FlatList` ;
+- `keyboardShouldPersistTaps="handled"` : sans ça, le premier tap pendant que le clavier est ouvert ne fait que **fermer le clavier** ;
+- la règle « **texte ou étiquette** » est vérifiée **deux fois** : dans l'UI (bouton désactivé) pour l'ergonomie, et dans le backend (zod `.refine`, cf. 2.8) pour la sécurité. **Ne jamais faire confiance au client seul.** Un joueur tagué seul, sans texte ni étiquette, est refusé ;
+- dans la liste : étiquettes `#Perte de balle`, joueurs `@Dembélé`.
+
+### 6.9 Organisation du code (convention FVA)
 
 ```
 src/app/         écrans uniquement (routes)
@@ -858,6 +1220,53 @@ Analogie data : `app/` = couche présentation (dashboards), `lib/` = couche serv
 **Ex 6.3** — Sélecteur de dates horizontal J-2..J+7 (comme FVA) en haut de l'écran Matchs, filtrant les données en dur.
 
 **Ex 6.4** — Crée un `FavoritesContext` (équipes favorites, `Set<number>`) ; étoile sur l'écran équipe ; les matchs des favoris sont surlignés dans la liste.
+
+**Ex 6.5** — *Lifting state up*, avec des données en dur. Dans l'écran `match/[id]`, crée :
+- `LineupPanel` : deux colonnes (domicile / extérieur), un bouton par équipe, 11 boutons joueurs (numéro + nom). Il reçoit `selectedTeamId`, `selectedPlayerIds`, `onToggleTeam`, `onTogglePlayer` et **ne possède aucun `useState` métier**.
+- Au-dessus du `NoteComposer`, les tags sélectionnés en « puces » avec une croix pour les retirer.
+- Règles : une seule équipe (re-toucher désélectionne), 11 joueurs max, remise à zéro après l'ajout d'une note.
+- Bonus : le panneau est repliable (flèche dans l'en-tête), avec `accessibilityState={{ selected }}` sur les boutons.
+
+<details><summary>Corrigé Ex 6.5 (écran parent)</summary>
+
+```tsx
+const [teamTag, setTeamTag] = useState<number | null>(null);
+const [playerTags, setPlayerTags] = useState<number[]>([]);
+
+const names = useMemo(
+  () => new Map(lineups.flatMap((l) => [...l.startXI, ...l.substitutes]).map((p) => [p.id, p.name])),
+  [lineups],
+);
+const tags = [
+  ...(teamTag ? [{ key: `t${teamTag}`, label: teamTag === fixture.home.id ? fixture.home.name : fixture.away.name }] : []),
+  ...playerTags.map((id) => ({ key: `p${id}`, label: names.get(id) ?? "?" })),
+];
+const removeTag = (key: string) =>
+  key.startsWith("t") ? setTeamTag(null) : setPlayerTags((cur) => cur.filter((id) => `p${id}` !== key));
+
+return (
+  <>
+    <LineupPanel
+      fixture={fixture}
+      lineups={lineups}
+      selectedTeamId={teamTag}
+      selectedPlayerIds={playerTags}
+      onToggleTeam={(id) => setTeamTag((cur) => (cur === id ? null : id))}
+      onTogglePlayer={(id) =>
+        setPlayerTags((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 11 ? cur : [...cur, id]))}
+    />
+    <NoteComposer tags={tags} onRemoveTag={removeTag} onSubmit={submit} />
+  </>
+);
+```
+Compare ensuite avec `mobile/src/components/LineupPanel.tsx` (styles, `PlayerButton`, remplaçants, message « Compo publiée ~1 h avant le match »).
+</details>
+
+**Ex 6.6** — Crée `useNow()` et affiche dans l'en-tête de l'écran match une minute qui avance seule pour un match `"2H"` en dur (`elapsed: 67`, `fetchedAt` = heure d'ouverture de l'écran). Pour tester sans attendre, accélère : `intervalMs = 1000` et des « minutes » de 5 s.
+
+**Ex 6.7** — Étiquettes rapides dans ton `NoteComposer` : rangée horizontale, toggle, 8 max, bouton « Ajouter » actif si texte **ou** étiquette. Affiche-les `#étiquette` sous chaque note.
+
+**Ex 6.8** — Minute figée : implémente `draftMinute` (`number | null | undefined`) et `onActivity`. Test : commence une note à 67', attends 69', envoie → la note indique 67'. La note suivante repart de la minute courante.
 
 ---
 
@@ -979,6 +1388,51 @@ useQuery({
 });
 ```
 
+### 7.7 Réglages du cache, retour au premier plan, clés de requête
+
+**Un `QueryClient` partagé avec des réglages par défaut** (`mobile/src/lib/queries.ts`) :
+```ts
+export const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 60_000, gcTime: 30 * 60_000 } },
+});
+```
+- `staleTime` : pendant combien de temps une donnée est considérée **fraîche** (pas de re-fetch). 1 min ici.
+- `gcTime` : combien de temps une donnée **inutilisée** reste en mémoire avant d'être jetée. 30 min.
+Analogie : un TTL de cache, avec deux seuils distincts.
+
+**Rafraîchir au retour dans l'app** : sur le web, React Query rafraîchit quand l'onglet reprend le focus. Sur mobile, il faut lui dire ce qu'est le « focus » — l'app qui repasse au premier plan (`AppState`) :
+```ts
+focusManager.setEventListener((handleFocus) => {
+  const sub = AppState.addEventListener("change", (s) => handleFocus(s === "active"));
+  return () => sub.remove();
+});
+```
+Tu sors de l'app à la mi-temps, tu reviens : les scores se mettent à jour seuls.
+
+**Clés de requête centralisées** :
+```ts
+export const keys = {
+  me: ["me", "profile"] as const,
+  notes: (fixtureId: number) => ["notes", fixtureId] as const,
+  fixture: (id: number) => ["fixture", id] as const,
+};
+```
+Une seule définition pour `useQuery` **et** `invalidateQueries` → pas de faute de frappe qui empêcherait une invalidation. `as const` fige le tableau en type littéral (`readonly ["me", "profile"]` au lieu de `string[]`).
+
+### 7.8 Les erreurs métier : `402 premium_required`
+
+Une API ne renvoie pas que « OK » ou « en panne ». FVA renvoie **`402 Payment Required`** quand une fonctionnalité est réservée au Premium (résumé IA, saisons archivées). Le client doit traiter ce cas **différemment** d'une panne :
+
+```ts
+try {
+  await api.requestSummary(fixtureId);
+} catch (err) {
+  if (err instanceof ApiError && err.code === "premium_required") router.push("/premium");   // proposer l'offre
+  else Alert.alert("Erreur", "Réessaie dans un instant.");                                    // vraie erreur
+}
+```
+Et on ne **re-tente pas** une 402 : elle n'est pas `retryable` (cf. `ApiError.retryable` : seulement réseau, 408, 429, 5xx). Mieux encore : ne pas proposer le bouton du tout quand on sait que l'utilisateur est en gratuit (`isPremium(me)`), et garder la 402 comme filet de sécurité côté serveur.
+
 ### Exercices (API simulée lancée ; pour l'instant, récupère un token avec `curl` et mets-le en dur via `setToken`)
 
 **Ex 7.1** — Remplace les données en dur de l'écran Matchs par `useFixtures(date)`. Gère loading / erreur / vide.
@@ -994,6 +1448,53 @@ useQuery({
 **Ex 7.6** — Bouton « Générer le résumé » (visible si `canSummarize`) + polling jusqu'à `ready` + affichage du texte.
 
 **Ex 7.7** — Onglet « Mes notes » : liste `/me/matches`, cliquable vers le match.
+
+**Ex 7.8** — Compos réelles et notes taguées :
+- `GET /fixtures/:id` renvoie aussi `lineups: Lineup[]` — **vide** tant que la compo n'est pas publiée (~1 h avant le coup d'envoi). Branche ton `LineupPanel` (Ex 6.5) dessus et gère le cas vide.
+- Envoie `teamId` et `playerIds` dans le `PUT` de la note ; affiche sous chaque note les noms des joueurs/équipe tagués.
+- Modifier une note (tap dessus) recharge ses tags dans le panneau.
+- Ajoute un onglet ou une section « Joueurs » alimenté par `GET /me/players` (les joueurs que tu as tagués).
+- Vérifie avec `curl` que la note contient bien les tags.
+
+**Ex 7.9** — Branche la minute en direct sur la vraie donnée : `liveMinute(fixture, fixtureQ.dataUpdatedAt, now)` (le match en direct de l'API simulée est à `elapsed: 67`). Envoie `labels` et `minute` dans le `PUT`, et vérifie avec `curl` que l'API refuse une note sans texte ni étiquette (`400 text_or_labels_required`).
+
+**Ex 7.10** — Crée `src/lib/queries.ts` avec un `queryClient` (`staleTime`, `gcTime`), l'objet `keys`, et le `focusManager` branché sur `AppState`. Test : ouvre l'écran Matchs, passe sur une autre app 2 minutes, reviens → une requête part (visible dans les logs de l'API simulée).
+
+**Ex 7.11** — Freemium : `useMe()` (`GET /me`) et `isPremium(me)`. Le bouton « Générer le résumé » ouvre un écran `premium` si l'utilisateur est en gratuit ; et si l'API renvoie quand même `402 premium_required`, redirige aussi vers `premium`. Passe en Premium avec :
+```bash
+curl -XPOST -H "authorization: Bearer $TOKEN" localhost:4000/dev/webhook -d '{"plan":"premium"}'
+```
+puis vérifie que le résumé se génère.
+
+**Ex 7.12** — Évènements du match : `GET /fixtures/:id` renvoie `events` (remplacements, cartons rouges). Écris `playerMarks(lineups, events): Map<number, { in?: string; out?: string; red?: string }>` et affiche dans ton `LineupPanel` « ↑ 58' », « ↓ 58' », « 🟥 45+2' ». Piège (réel !) : sur un remplacement, le fournisseur met l'entrant tantôt dans `playerId`, tantôt dans `assistId`. Utilise la compo pour décider : l'entrant est celui qui était sur le **banc**. Compare ensuite avec `mobile/src/lib/events.ts`.
+
+<details><summary>Corrigé Ex 7.12</summary>
+
+```ts
+const at = (e: MatchEvent) => `${e.minute}${e.extra ? `+${e.extra}` : ""}'`;
+
+export function playerMarks(lineups: Lineup[], events: MatchEvent[]) {
+  const marks = new Map<number, PlayerMarks>();
+  const mark = (id: number | null | undefined, m: PlayerMarks) => {
+    if (id == null) return;
+    marks.set(id, { ...marks.get(id), ...m });            // fusion : un joueur peut entrer PUIS être expulsé
+  };
+  const bench = new Set(lineups.flatMap((l) => l.substitutes.map((p) => p.id)));
+
+  for (const e of events) {
+    if (e.type === "substitution") {
+      const playerEnters = e.playerId != null && bench.has(e.playerId);
+      mark(playerEnters ? e.assistId : e.playerId, { out: at(e) });
+      mark(playerEnters ? e.playerId : e.assistId, { in: at(e) });
+    } else if (e.type === "red" || e.type === "second_yellow") {
+      mark(e.playerId, { red: at(e) });
+    }
+  }
+  return marks;
+}
+```
+La version de FVA va plus loin : elle trie les évènements par minute et gère un remplaçant entré puis ressorti (`cameOn`). C'est du **nettoyage de données d'un fournisseur incohérent** — ton métier de data engineer, côté client.
+</details>
 
 <details><summary>Corrigé Ex 7.5</summary>
 
@@ -1049,6 +1550,51 @@ const t = await SecureStore.getItemAsync("token");   // string | null
 await SecureStore.deleteItemAsync("token");
 ```
 
+### 8.3 Connexion Google / Apple (*social login*)
+
+FVA (Kalpin) propose « Continuer avec Google » et, **sur iOS**, « Continuer avec Apple ». Pas de SDK Google ni Apple dans l'app : c'est **Cognito** qui est fédéré avec ces fournisseurs. L'app ouvre la même page de connexion hébergée, avec un paramètre qui saute directement au bon fournisseur :
+
+```ts
+// mobile/src/lib/auth.tsx (extrait)
+signIn: (provider?: "Google" | "SignInWithApple") => /* … */
+  extraParams: provider ? { identity_provider: provider } : {},
+```
+```tsx
+// sign-in.tsx
+{Platform.OS === "ios" ? <Button label="Continuer avec Apple" onPress={() => go("SignInWithApple")} /> : null}
+<Button label="Continuer avec Google" onPress={() => go("Google")} />
+```
+- **Règle App Store** : si une app propose un login social tiers (Google…), elle **doit** aussi proposer *Sign in with Apple*. D'où le `Platform.OS === "ios"`.
+- `Platform.OS` (`"android" | "ios"`) : la façon standard de faire du code spécifique à une plateforme.
+- Quel que soit le fournisseur, l'app reçoit les mêmes tokens Cognito, et l'utilisateur est identifié par son **`sub`** Cognito (id stable). C'est ce `sub` qui sert aussi d'identifiant pour les abonnements (bonus C).
+
+### 8.4 Déconnexion vs suppression de compte
+
+| | Déconnexion | Suppression de compte |
+|---|---|---|
+| Serveur | rien (ou révocation du token) | **efface** toutes les données (`DELETE /me`) |
+| Local | tokens supprimés | tokens **+ cache React Query + outbox SQLite** effacés |
+| Obligatoire ? | — | **oui** : Google Play et l'App Store exigent qu'on puisse supprimer son compte **depuis l'app** |
+
+Extrait de `mobile/src/app/account.tsx` :
+```tsx
+const doDelete = () =>
+  Alert.alert("Supprimer mon compte ?", "Toutes tes notes… seront définitivement supprimées.", [
+    { text: "Annuler", style: "cancel" },
+    {
+      text: "Supprimer définitivement",
+      style: "destructive",                 // bouton rouge sur iOS
+      onPress: async () => {
+        await api.deleteAccount();          // 1. serveur d'abord
+        await clearOutbox();                // 2. puis TOUT le local
+        queryClient.clear();
+        await forgetSession();
+      },
+    },
+  ]);
+```
+L'ordre compte : si l'appel serveur échoue, on n'efface rien localement et on affiche une erreur. L'écran Compte propose aussi l'**export** des données (`Share.share` d'un JSON) — droit à la portabilité (RGPD).
+
 ### Exercices
 
 **Ex 8.1** — `npx expo install expo-secure-store`. Écris `src/lib/auth.tsx` : `AuthProvider` (état `status: "loading" | "signedOut" | "signedIn"`), `signIn(username, password)`, `signOut()`, hook `useAuth()`.
@@ -1060,6 +1606,12 @@ await SecureStore.deleteItemAsync("token");
 **Ex 8.4** — Redémarre l'API simulée (les tokens sont en mémoire → invalidés). Fais en sorte qu'un 401 déconnecte proprement l'utilisateur.
 
 **Ex 8.5 (lecture)** — Lis `mobile/src/lib/auth.tsx` de FVA. Repère : PKCE, stockage des tokens, rafraîchissement, et mode démo.
+
+**Ex 8.6** — Remplace tes `<Redirect>` par `Stack.Protected` (cf. 5.5) dans le layout racine. Vérifie que la déconnexion renvoie bien sur `sign-in` sans aucune navigation manuelle.
+
+**Ex 8.7** — Bouton « Supprimer mon compte » dans `account.tsx` : confirmation `Alert` destructive, `DELETE /me` sur l'API simulée, puis nettoyage local complet (SecureStore, `queryClient.clear()`, outbox). Vérifie avec `curl` que tes notes ont disparu et que ton ancien token renvoie `401`.
+
+**Ex 8.8** — Bouton « Exporter mes données » : récupère tes notes et partage-les en JSON avec `Share.share`.
 
 ---
 
@@ -1234,6 +1786,8 @@ test("today", () => {
 
 ### Exercices
 
+**Ex 11.0** — Teste `liveMinute` sans attendre grâce au `now` injecté : `fetchedAt = 0`, `now = 3 * 60_000` → `elapsed + 3` en `"2H"` ; inchangé en `"HT"` ; plafonné à 105 en `"2H"` avec `elapsed: 88` et 30 min de dérive ; `null` si `elapsed` est `null`.
+
 **Ex 11.1** — Installe `jest-expo` et teste `format.ts` et la fonction de fusion notes serveur + outbox (au moins 5 cas, dont doublons et suppressions en attente).
 
 **Ex 11.2** — Test de composant : `NoteComposer` — bouton désactivé si vide, `onSubmit` appelé avec le bon texte.
@@ -1276,7 +1830,47 @@ eas update --branch preview --message "fix: tri des matchs"
 
 ### 12.4 Play Store (aperçu)
 
-Compte développeur Google Play (frais unique) → créer l'app → piste de test interne → upload de l'AAB (`eas submit -p android`) → fiche Store, politique de confidentialité (FVA : export et suppression de compte = obligations RGPD/Play), formulaire *Data safety*.
+Compte développeur Google Play (frais unique) → créer l'app → piste de test interne → upload de l'AAB (`eas submit -p android`) → fiche Store, politique de confidentialité (FVA : export et suppression de compte = obligations RGPD/Play), formulaire *Data safety*. **Le détail complet est dans le bonus B.**
+
+### 12.4 bis Le `eas.json` de FVA
+
+```json
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": {
+    "development": { "developmentClient": true, "distribution": "internal", "android": { "buildType": "apk" }, "environment": "development" },
+    "preview":     { "distribution": "internal", "android": { "buildType": "apk" }, "environment": "preview" },
+    "production":  { "autoIncrement": true, "environment": "production" }
+  },
+  "submit": { "production": {} }
+}
+```
+- `appVersionSource: "remote"` + `autoIncrement: true` : EAS gère le **numéro de build** (`versionCode` Android) et l'incrémente à chaque build de production. Le Play Store refuse deux uploads avec le même `versionCode` — plus besoin d'y penser.
+- `environment` : chaque profil lit ses variables (`EXPO_PUBLIC_API_URL`…) dans les **environnements EAS** (stockés chez Expo, `eas env:create`), au lieu d'un `.env` local. Le `.env.example` du repo documente les variables attendues.
+- `buildType: "apk"` pour l'installation directe ; la production produit un **AAB** (format exigé par le Play Store).
+
+### 12.4 ter Icône, splash, identité (`app.json`)
+
+```json
+"name": "Kalpin",
+"android": {
+  "package": "com.example.fva",
+  "allowBackup": false,
+  "adaptiveIcon": {
+    "backgroundColor": "#22C574",
+    "foregroundImage": "./assets/android-icon-foreground.png",
+    "backgroundImage": "./assets/android-icon-background.png",
+    "monochromeImage": "./assets/android-icon-monochrome.png"
+  }
+}
+```
+- **Icône adaptative** Android : un premier plan + un fond, que chaque constructeur découpe à sa façon (rond, carré arrondi…). Garde le logo dans la **zone centrale** (~66 %). L'icône **monochrome** sert aux icônes thématiques d'Android 13+.
+- **Splash** : plugin `expo-splash-screen` (`image`, `backgroundColor`).
+- `allowBackup: false` : la base locale (chiffrée) n'est pas copiée dans les sauvegardes Google — sa clé est liée à l'appareil, la restaurer ailleurs ne marcherait pas.
+- `package` : l'**identifiant définitif** de l'app sur le Play Store. `com.example.*` est un placeholder : il est **refusé** par le store et ne pourra plus changer après la première publication.
+- FVA garde ses logos en **SVG** (`assets/logo/`) et génère les PNG par script : une source, plusieurs tailles.
+
+Toute modification de `app.json` (icône, permissions, package) = **nouveau build natif** (pas d'OTA).
 
 ### 12.5 Environnements
 
@@ -1291,6 +1885,8 @@ Variables `EXPO_PUBLIC_*` par profil dans `eas.json` (`env`), ou `app.config.ts`
 **Ex 12.3** — Deux profils avec deux URL d'API différentes (IP locale / une URL factice) et vérifie laquelle est utilisée.
 
 **Ex 12.4 (réflexion)** — Liste les changements qui **exigent** un nouveau build natif vs ceux qui passent en OTA.
+
+**Ex 12.5** — Crée une icône adaptative pour `mini-fva` (premier plan, fond, monochrome) et un splash à ta couleur. Rebuild et vérifie le rendu sur ton téléphone avec plusieurs formes d'icône (Paramètres → Fond d'écran et style, selon le constructeur).
 
 ---
 
@@ -1310,7 +1906,13 @@ Tu as maintenant tout le vocabulaire. Place-toi dans `~/projects/football-view-a
 | `src/app/match/[id].tsx` | détail, notes, résumé IA | 5, 7, 9 |
 | `src/app/team/[id].tsx`, `player/[id].tsx` | historique d'une entité | 5, 7 |
 | `src/app/sign-in.tsx`, `account.tsx` | login Cognito, export RGPD, suppression | 8 |
-| `src/components/NoteComposer.tsx` | saisie texte + voix | 4, 10 |
+| `src/components/NoteComposer.tsx` | saisie texte + voix, puces des tags | 4, 6, 10 |
+| `src/components/LineupPanel.tsx` | compos cliquables pour taguer équipe/joueurs d'une note | 4, 6 |
+| `src/lib/minute.ts` | minute en direct calculée sur le téléphone (`liveMinute`, `minuteLabel`, `useNow`) | 2, 6, 11 |
+| `src/lib/events.ts` | remplacements / cartons rouges par joueur, nettoyage des données du fournisseur | 7 |
+| `src/lib/purchases.ts` | abonnements via RevenueCat (offres, achat, restauration) | bonus C |
+| `src/app/premium.tsx`, `src/components/Locked.tsx` | paywall, saisons archivées verrouillées | 7, bonus C |
+| `src/lib/brand.ts`, `assets/logo/`, `assets/fonts/` | nom « Kalpin », slogan, logo, police | 4, 12 |
 | `src/components/MatchRow.tsx`, `ui.tsx`, `Dropdown.tsx` | UI réutilisable | 3, 4 |
 | `src/lib/types.ts` | contrat d'API (miroir du backend) | 2 |
 | `src/lib/api.ts` | client HTTP, `ApiError`, mode démo | 7 |
@@ -1327,6 +1929,7 @@ Tu as maintenant tout le vocabulaire. Place-toi dans `~/projects/football-view-a
 3. `_layout.tsx` racine : ordre des providers.
 4. `(tabs)/index.tsx` : retrouve `useState`, `useMemo`, `SectionList`, `useFixtures`.
 5. `match/[id].tsx` + `NoteComposer.tsx` + `outbox.ts` : suis une note du doigt jusqu'à DynamoDB (côté backend : `backend/src/`).
+6. `LineupPanel.tsx` + les états `teamTag` / `playerTags` de `match/[id].tsx` : suis un tag depuis le tap sur un joueur jusqu'au `PUT` (`playerIds`), puis jusqu'à la page `player/[id]`. Côté données : les compos viennent d'API-Football (`backend/src/lib/football-api.ts`) ; en mode démo, de `SQUADS` dans `demo.ts`.
 
 ### 13.3 Lancer FVA en mode démo
 
@@ -1345,6 +1948,8 @@ npx expo run:android      # development build (modules natifs)
 
 **Ex 13.3** — Ajoute un filtre « Seulement mes matchs notés » (`my !== null`) persistant pendant la session.
 
+**Ex 13.3 bis** — Dans `LineupPanel`, affiche à côté de chaque joueur le nombre de notes qui le taguent déjà dans ce match (dérivé des `notes` de l'écran : passe une `Map<playerId, count>` en prop). Vérifie en mode démo.
+
 **Ex 13.4** — Ajoute un champ au contrat (ex. `Note.pinned?: boolean`) : modifie `backend/src/domain/types.ts`, `mobile/src/lib/types.ts`, `demo.ts` ; constate que le typecheck t'indique tous les endroits à adapter.
 
 **Ex 13.5** — Lance `npx tsc --noEmit && npx expo lint` puis ouvre une PR avec ta branche.
@@ -1353,11 +1958,11 @@ npx expo run:android      # development build (modules natifs)
 
 ---
 
-## Bonus — Kotlin & Android natif
+## Bonus A — Kotlin & Android natif
 
 Objectif : comprendre ce que React Native génère pour toi, et savoir écrire un petit module natif si un jour une librairie manque.
 
-### B.1 Kotlin pour un dev Python
+### A.1 Kotlin pour un dev Python
 
 ```kotlin
 val name: String = "Mbappé"          // val = const, var = let
@@ -1380,7 +1985,7 @@ when (s) { is Status.Live -> "🔴"; is Status.Finished -> s.score }            
 suspend fun load(): List<Fixture> = api.fixtures()                             // coroutines ≈ async/await
 ```
 
-### B.2 Les briques d'une app Android native
+### A.2 Les briques d'une app Android native
 
 | Concept | Rôle | Équivalent RN/Expo |
 |---|---|---|
@@ -1417,21 +2022,258 @@ fun Counter() {
 
 ### Exercices bonus (`bonus-kotlin/`)
 
-**B.1** — Android Studio → New Project → *Empty Activity* (Compose), emplacement `~/projects/android-learning/bonus-kotlin`, package `com.thomas.minifva.native`. Lance sur ton téléphone (bouton ▶).
+**A.1** — Android Studio → New Project → *Empty Activity* (Compose), emplacement `~/projects/android-learning/bonus-kotlin`, package `com.thomas.minifva.native`. Lance sur ton téléphone (bouton ▶).
 
-**B.2** — Explore : `AndroidManifest.xml`, `MainActivity.kt`, `app/build.gradle.kts`, `res/`. Compare avec `mini-fva/android/` généré au module 10.
+**A.2** — Explore : `AndroidManifest.xml`, `MainActivity.kt`, `app/build.gradle.kts`, `res/`. Compare avec `mini-fva/android/` généré au module 10.
 
-**B.3** — Écris le `MatchRow` + une `LazyColumn` (≈ FlatList) de fixtures en dur, avec un `data class Fixture`.
+**A.3** — Écris le `MatchRow` + une `LazyColumn` (≈ FlatList) de fixtures en dur, avec un `data class Fixture`.
 
-**B.4** — Ajoute la permission INTERNET au manifeste, puis charge `/fixtures` de l'API simulée avec Ktor ou Retrofit + `kotlinx.serialization` dans un `ViewModel` (`viewModelScope.launch`). Autorise le HTTP en clair pour ton IP locale (`usesCleartextTraffic` ou network security config) — et comprends pourquoi c'est interdit par défaut.
+**A.4** — Ajoute la permission INTERNET au manifeste, puis charge `/fixtures` de l'API simulée avec Ktor ou Retrofit + `kotlinx.serialization` dans un `ViewModel` (`viewModelScope.launch`). Autorise le HTTP en clair pour ton IP locale (`usesCleartextTraffic` ou network security config) — et comprends pourquoi c'est interdit par défaut.
 
-**B.5** — Écran détail avec Navigation Compose (`match/{id}`).
+**A.5** — Écran détail avec Navigation Compose (`match/{id}`).
 
-**B.6 (pont vers RN)** — Dans `mini-fva`, crée un **Expo Module** local en Kotlin :
+**A.6 (pont vers RN)** — Dans `mini-fva`, crée un **Expo Module** local en Kotlin :
 ```bash
 npx create-expo-module@latest --local battery-level
 ```
 Expose une fonction `getBatteryLevel(): Int` (via `BatteryManager`), appelle-la depuis TS et affiche « 🔋 42 % » dans l'écran compte. Tu as maintenant fait le chemin complet TS → JSI → Kotlin → Android.
+
+---
+
+## Bonus B — Publier sur le Play Store (et l'App Store)
+
+Le module 12 t'a appris à produire un AAB. Ici : tout ce qu'il faut **autour** pour qu'une app soit publiée, et le rester.
+
+> ⚠️ Les règles des stores (frais, délais, nombre de testeurs, niveau d'API cible) changent régulièrement. Les chiffres ci-dessous sont des ordres de grandeur : vérifie toujours la page officielle de la Play Console avant de te lancer.
+
+### B.1 Le parcours Google Play
+
+```
+Compte développeur (frais uniques, vérification d'identité)
+  → Créer l'app dans la Play Console (nom, langue, gratuite/payante)
+  → Remplir le « Contenu de l'application » (obligatoire, voir B.2)
+  → Piste de test INTERNE   : jusqu'à 100 testeurs, dispo en quelques minutes, pas de revue
+  → Piste de test FERMÉE    : testeurs invités ; pour un compte PERSONNEL récent, Google exige
+                              un test fermé avec un minimum de testeurs actifs pendant ~2 semaines
+                              avant d'autoriser la production
+  → (Test OUVERT, optionnel)
+  → PRODUCTION              : revue Google (quelques heures à quelques jours), déploiement
+                              progressif possible (10 % → 50 % → 100 %)
+```
+
+**Compte personnel ou organisation ?** Un compte « organisation » (numéro D-U-N-S d'entreprise requis) échappe à l'obligation de test fermé et affiche le nom de la société. Un compte personnel affiche ton nom… et ton adresse si tu monétises. À décider **avant** de créer le compte.
+
+### B.2 Le « Contenu de l'application » (la partie que tout le monde sous-estime)
+
+| Rubrique | Pour FVA / Kalpin |
+|---|---|
+| **Règles de confidentialité** | une URL publique obligatoire décrivant les données collectées |
+| **Sécurité des données** (*Data safety*) | déclarer : e-mail (compte), notes (contenu utilisateur), achats ; chiffrées en transit ; **supprimables à la demande** |
+| **Suppression de compte** | possible **dans l'app** (cf. 8.4) **et** via un lien web, à déclarer dans la console |
+| **Classification du contenu** | questionnaire IARC → « Tout public » |
+| **Public cible** | 13+ / adultes (pas d'enfants → règles allégées) |
+| **Accès à l'app** | Google doit pouvoir tester : fournir un compte de test ou un mode démo (FVA a `EXPO_PUBLIC_DEMO`) |
+| **Annonces** | « l'app ne contient pas de publicité » |
+| **Permissions sensibles** | justifier le micro (dictée) |
+
+Une déclaration incohérente avec le comportement réel de l'app = **refus** ou suspension. Fais l'inventaire des données comme un registre RGPD.
+
+### B.3 La fiche Play Store
+
+- Nom (30 caractères), description courte (80), description longue (4 000) — reprends `brand.ts` (`TAGLINE`) pour rester cohérent.
+- Icône 512×512, image de présentation 1024×500, **au moins 2 captures d'écran** téléphone.
+- Catégorie (Sports), coordonnées de contact.
+- Astuce : génère les captures depuis l'émulateur en mode démo, avec des données propres.
+
+### B.4 Signature et identifiants
+
+- **Clé de signature d'upload** : EAS la crée et la stocke (`eas credentials`). Google re-signe ensuite avec la clé de l'app (*Play App Signing*). Garde quand même une sauvegarde.
+- **`android.package`** : définitif après la première publication ; `com.example.*` est refusé → choisis ton vrai domaine inversé (`fr.tondomaine.kalpin`).
+- **`versionCode`** : entier strictement croissant à chaque upload (géré par `autoIncrement`, cf. 12.4 bis). **`version`** (`1.0.0`) : la version affichée aux utilisateurs.
+- **Niveau d'API cible** (`targetSdkVersion`) : Google impose chaque année de viser une version récente d'Android. Avec Expo, monter de SDK Expo suffit en général.
+
+### B.5 Automatiser l'envoi : `eas submit`
+
+1. Dans Google Cloud, crée un **compte de service** avec accès à la Play Console, télécharge sa clé JSON (c'est un secret : jamais dans git).
+2. **Le tout premier AAB doit être envoyé à la main** dans la console (limitation Google), ensuite :
+```bash
+eas build -p android --profile production
+eas submit -p android --latest          # envoie le dernier build sur la piste configurée
+```
+Dans `eas.json`, `"submit": { "production": { "android": { "track": "internal" } } }` pour viser la piste interne d'abord.
+
+### B.6 Et l'App Store ?
+
+Même logique, plus stricte : compte Apple Developer (abonnement **annuel**), **revue humaine à chaque version**, TestFlight pour les tests, *App Privacy* (équivalent de Data safety), *Sign in with Apple* obligatoire si login social (cf. 8.3), et paiements numériques **obligatoirement** via les achats intégrés d'Apple. EAS construit l'app iOS dans le cloud : pas besoin de Mac pour builder, mais un iPhone aide à tester.
+
+### Exercices bonus B
+
+**B.1** — Rédige l'inventaire des données de `mini-fva` (quoi, pourquoi, où c'est stocké, chiffré ?, supprimable ?) au format du formulaire *Data safety*.
+
+**B.2** — Rédige une politique de confidentialité d'une page pour `mini-fva` et publie-la (GitHub Pages ou un bucket S3 statique).
+
+**B.3** — Prépare une fiche Store complète dans `store/fiche.md` : nom, descriptions courte/longue, 4 captures (émulateur), icône 512.
+
+**B.4** — Si tu crées un compte Play Console : publie `mini-fva` en **test interne**, installe-la depuis le Play Store, puis publie une mise à jour (vérifie l'incrément du `versionCode`).
+
+---
+
+## Bonus C — Comptes, abonnements & paiements
+
+FVA est devenue **Kalpin** avec un modèle **freemium** : la prise de notes est gratuite ; **Premium** (abonnement mensuel ou annuel) débloque les résumés IA et l'historique des saisons passées.
+
+### C.1 Ce qui est imposé par les stores
+
+- Un contenu **numérique** consommé dans l'app (fonctionnalités, abonnement) doit être vendu via le **système de facturation du store** : *Google Play Billing* sur Android, *In-App Purchase* sur iOS. Pas de Stripe pour ça (Stripe reste possible pour des biens **physiques** ou des services hors app).
+- Le store prend une **commission** sur chaque paiement (de l'ordre de 15 % sur les abonnements ; vérifie les conditions actuelles).
+- L'utilisateur doit pouvoir **gérer/résilier** son abonnement facilement, et **restaurer** ses achats (changement de téléphone).
+- Le prix, la période et le renouvellement automatique doivent être **affichés clairement** avant l'achat.
+
+### C.2 Pourquoi RevenueCat ?
+
+Implémenter Google Play Billing **et** StoreKit (Apple) directement, c'est : deux APIs différentes, vérifier chaque reçu côté serveur, gérer renouvellements, périodes de grâce, remboursements, changements d'offre… RevenueCat est une **couche d'abstraction** (gratuite jusqu'à un certain chiffre d'affaires) :
+
+```
+  App (react-native-purchases)            Store (Google / Apple)
+        │  achat ───────────────────────────────▶│
+        │                                        │ reçu
+        ▼                                        ▼
+   RevenueCat  ◀────────── valide les reçus, suit les renouvellements
+        │
+        │ webhook (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION…)
+        ▼
+   Backend FVA  → met à jour profile.plan = "premium" / "free"   ← SOURCE DE VÉRITÉ
+        │
+        ▼
+   GET /me → { plan, premiumUntil }  → l'app affiche / débloque
+```
+
+Vocabulaire RevenueCat :
+- **Product** : ce que tu vends dans le store (`premium_monthly`, `premium_annual`).
+- **Entitlement** : le **droit** que ça donne (`premium`). Plusieurs produits → un même droit.
+- **Offering / Package** : la sélection de produits affichée dans le paywall (modifiable à distance sans nouvelle version).
+- **App User ID** : l'identifiant de ton utilisateur. FVA utilise le **`sub` Cognito** → l'abonnement suit le **compte**, pas le téléphone.
+
+### C.3 Le code côté app (`mobile/src/lib/purchases.ts`)
+
+```ts
+import Purchases from "react-native-purchases";
+
+const ENTITLEMENT = "premium";
+// Clés PUBLIQUES du SDK (différentes Android / iOS) : elles peuvent être dans le bundle, ce ne sont pas des secrets.
+const apiKey = () => (Platform.OS === "ios" ? appConfig.revenueCatIosKey : appConfig.revenueCatAndroidKey);
+export const purchasesAvailable = () => !appConfig.demo && Boolean(apiKey());
+
+export async function initPurchases(userId: string) {        // à la connexion
+  if (configuredFor === null) Purchases.configure({ apiKey: apiKey(), appUserID: userId });
+  else await Purchases.logIn(userId);                          // changement de compte
+}
+export async function resetPurchases() { await Purchases.logOut(); }   // à la déconnexion
+
+export async function getOffers(): Promise<Offer[]> {
+  const offerings = await Purchases.getOfferings();
+  return (offerings.current?.availablePackages ?? []).map((pkg) => ({
+    id: pkg.identifier,
+    price: pkg.product.priceString,            // prix LOCALISÉ fourni par le store ("4,99 €")
+    period: pkg.packageType === "MONTHLY" ? "monthly" : pkg.packageType === "ANNUAL" ? "annual" : "other",
+    pkg,
+  }));
+}
+
+/** true si l'achat a débloqué Premium, false si l'utilisateur a annulé. */
+export async function buy(offer: Offer): Promise<boolean> {
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(offer.pkg);   // ouvre la feuille de paiement Google
+    return Boolean(customerInfo.entitlements.active[ENTITLEMENT]);
+  } catch (err) {
+    if ((err as { userCancelled?: boolean }).userCancelled) return false;  // annuler n'est PAS une erreur
+    throw err;
+  }
+}
+
+export const restore = async () => Boolean((await Purchases.restorePurchases()).entitlements.active[ENTITLEMENT]);
+export const manageSubscription = () => Purchases.showManageSubscriptions();
+```
+
+Et dans le layout racine, l'abonnement est **lié au compte** :
+```tsx
+useEffect(() => {
+  if (userId) void initPurchases(userId).catch(() => undefined);
+  else void resetPurchases();
+}, [userId]);
+```
+
+Points d'architecture :
+- **Jamais de prix en dur** : le store fournit le prix dans la devise de l'utilisateur.
+- **Annulation ≠ erreur** : l'utilisateur qui ferme la feuille de paiement ne doit pas voir « Achat impossible ».
+- `purchasesAvailable()` : en mode démo ou sans clé, l'écran affiche un message au lieu de planter → l'app reste testable par la revue Google (cf. B.2 « Accès à l'app »).
+- Le SDK est un module **natif** → development build obligatoire.
+
+### C.4 Le paywall (`mobile/src/app/premium.tsx`)
+
+Écran modal (`presentation: "modal"`, cf. 5.5) : bénéfices, offres, « Restaurer mes achats », mention du renouvellement automatique. Le détail intéressant est **après** l'achat :
+
+```ts
+const unlocked = async () => {
+  // Le backend apprend l'achat via le webhook RevenueCat : quelques secondes de décalage.
+  for (let i = 0; i < 5; i++) {
+    await qc.invalidateQueries({ queryKey: ["me"] });
+    if (isPremium(qc.getQueryData(keys.me))) break;
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  void qc.invalidateQueries();     // tout re-télécharger : les contenus verrouillés deviennent visibles
+  router.back();
+};
+```
+C'est de la **cohérence à terme** (*eventual consistency*) : le store, RevenueCat et ton backend ne sont pas synchronisés instantanément. L'app **interroge** le backend jusqu'à ce qu'il soit à jour — comme attendre qu'une partition soit écrite avant de lancer le job suivant.
+
+### C.5 Le verrouillage (*gating*) : serveur d'abord, UI ensuite
+
+| Couche | Rôle | Dans FVA |
+|---|---|---|
+| **Backend** | **sécurité** : refuse ce qui n'est pas payé | `402 premium_required` sur le résumé ; les saisons passées renvoient `locked: true` sans les données |
+| **App** | **ergonomie** : montre ce qui est verrouillé et donne envie | `LockedSeasonCard` (« Saison archivée — tes notes sont conservées »), bouton résumé → paywall |
+
+Ne fais **jamais** confiance au client : un utilisateur peut modifier l'app ou appeler l'API à la main. Le client ne décide pas, il **reflète** ce que dit le serveur (`GET /me`).
+
+Les types du contrat :
+```ts
+export type Plan = "free" | "premium";
+export interface Me { plan: Plan; premiumUntil: string | null; currentSeason: number }
+export interface EntityHistory<E> {
+  entity: E; matches: EntityMatch[]; seasons: SeasonSummary[];
+  /** Saisons archivées masquées en gratuit, avec leur nombre de matchs. */
+  lockedSeasons?: { season: number; matchCount: number }[];
+}
+```
+Le serveur renvoie **combien** de matchs sont verrouillés (pour le message incitatif), mais **pas leur contenu**.
+
+### C.6 Le webhook côté backend (pour comprendre, sans infra)
+
+`backend/src/handlers/revenuecat.ts` : un endpoint HTTP appelé **par RevenueCat** (jamais par l'app) :
+1. Vérifie un **secret partagé** dans le header `Authorization`, avec une comparaison à temps constant (`timingSafeEqual`, contre les attaques par mesure du temps).
+2. Valide le corps avec **zod** (cf. 2.8).
+3. Selon `event.type` : `INITIAL_PURCHASE`, `RENEWAL`… → Premium jusqu'à `expiration_at_ms` ; `CANCELLATION` → **garde l'accès jusqu'à la fin de la période payée** ; `EXPIRATION` → retour en gratuit.
+4. Un même évènement peut arriver deux fois : le traitement doit être **idempotent** — même principe que l'outbox (module 9).
+
+### C.7 Tester les achats sans payer
+
+- **Play Console → Paramètres → Test de licence** : ajoute ton adresse Google. Tes achats sur une piste de test sont gratuits, et les abonnements se renouvellent en accéléré (quelques minutes au lieu d'un mois).
+- Les produits d'abonnement ne peuvent être créés qu'**après** avoir envoyé un premier build contenant la librairie de facturation (cf. B.5).
+- RevenueCat a un mode *sandbox* : les évènements de test arrivent au webhook avec `environment: "SANDBOX"`.
+- Avant tout ça : l'**API simulée** (`POST /dev/webhook`) te permet de développer tout le parcours freemium sans store.
+
+### Exercices bonus C (API simulée)
+
+**C.1** — Écran `premium.tsx` en modal : 3 bénéfices, 2 offres **en dur** (« Mensuel 4,99 € », « Annuel 39,99 € — le plus avantageux »), bouton « Restaurer ». Le bouton d'achat appelle `POST /dev/webhook {"plan":"premium"}` après un faux délai de 3 s, puis **interroge** `GET /me` jusqu'à `plan === "premium"` (la boucle de C.4).
+
+**C.2** — Gating : en gratuit, le bouton « Résumé » ouvre le paywall ; si le serveur répond quand même `402`, même chose. Repasse en gratuit avec `{"plan":"free"}` pour vérifier.
+
+**C.3** — Écran Compte : affiche « Premium jusqu'au 9 nov. » (formate `premiumUntil` avec `Intl.DateTimeFormat("fr-FR")`) ou un bouton « Passer à Premium ».
+
+**C.4** — Lecture : lis `mobile/src/lib/purchases.ts`, `src/app/premium.tsx` et `backend/src/handlers/revenuecat.ts`. Dessine le trajet d'un achat, du tap jusqu'à l'affichage du résumé IA, en marquant chaque endroit où un décalage temporel peut se produire.
+
+**C.5 (vrai store, optionnel)** — Avec un compte Play Console et un compte RevenueCat gratuit : crée un produit d'abonnement, un entitlement `premium`, installe `react-native-purchases`, fais un development build, et achète en tant que testeur de licence.
 
 ---
 
@@ -1462,12 +2304,17 @@ Expose une fonction `getBatteryLevel(): Int` (via `BatteryManager`), appelle-la 
 | POST | `/auth/login` | `{username, password}` → `{accessToken}` (public) |
 | GET | `/health` | public |
 | GET | `/fixtures?date=YYYY-MM-DD` | calendrier J-2..J+7, 3 matchs/jour, 1 match en direct aujourd'hui |
-| GET | `/fixtures/:id` | `{fixture, summary}` |
+| GET | `/fixtures/:id` | `{fixture, lineups, summary}` — `lineups` vide si coup d'envoi dans plus d'1 h |
 | GET | `/fixtures/:id/notes` | notes de l'utilisateur |
-| PUT | `/fixtures/:id/notes/:noteId` | upsert idempotent `{text, minute?, source, createdAt}` |
+| PUT | `/fixtures/:id/notes/:noteId` | upsert idempotent `{text, minute?, source, createdAt, teamId?, playerIds?, labels?}` — texte **ou** au moins une étiquette requis (sinon `400 text_or_labels_required`) ; 8 étiquettes max |
 | DELETE | `/fixtures/:id/notes/:noteId` | 204 |
 | GET / POST | `/fixtures/:id/summary` | POST → `pending` 4 s → `ready` |
-| GET | `/me/matches`, `/me/teams` | journal |
+| GET | `/me/matches`, `/me/teams`, `/me/players` | journal (`/me/players` = joueurs tagués dans tes notes) |
+| GET | `/me` | `{plan: "free" \| "premium", premiumUntil, currentSeason}` |
+| DELETE | `/me` | supprime le compte et toutes ses données (204), invalide les tokens |
+| POST | `/dev/webhook` | **simule** le webhook du store : `{"plan":"premium"}` ou `{"plan":"free"}` |
+
+`POST /fixtures/:id/summary` renvoie **`402 premium_required`** en plan gratuit. `GET /fixtures/:id` renvoie aussi `events` (remplacements, carton rouge).
 | GET | `/teams` | toutes les équipes |
 
 Variables : `PORT` (4000), `LATENCY_MS` (0), `FAIL_RATE` (0..1, renvoie des 503). Les données sont en mémoire : un redémarrage efface notes et tokens.
