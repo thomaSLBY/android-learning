@@ -510,7 +510,7 @@ Lance l'API simulée pour les exercices 2.4 et 2.5.
 
 **Ex 2.4** — `client.ts` : écris `login(username)` (POST `/auth/login`) puis `getFixtures(token, date)` et affiche « Domicile score Extérieur » pour les matchs du jour.
 
-**Ex 2.5** — Écris `withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T>` avec *backoff* exponentiel. Teste contre `FAIL_RATE=0.5 node mock-api/server.mjs`.
+**Ex 2.5** — Écris `withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T>` avec *backoff* exponentiel (=1er retry: attendre 200ms; puis 400ms, puis 800ms, ...). Teste contre `FAIL_RATE=0.5 node mock-api/server.mjs`.
 
 **Ex 2.6** — `minute.ts` : écris `minuteLabel(minute: number, status?: string): string` qui renvoie `"67'"`, mais `"45+2'"` si `status === "1H"` et `minute === 47`, `"90+4'"` en 2ᵉ mi-temps au-delà de 90, et `"MT"` à la mi-temps (`"HT"`). Teste au moins 6 cas avec `console.log`.
 
