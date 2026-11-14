@@ -1,3 +1,4 @@
+// No async needed, because only operations are done: no waiting task (e.g. live status of a match).
 function minuteLabel(minute: number, status?: string): string {
     return status === "1H" ? minute <= "45" ? String(minute) : "45+"+(minute-45)
     : status === "HT" ? "MT"
