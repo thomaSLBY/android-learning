@@ -1,5 +1,6 @@
 import { Text, View, StyleSheet } from "react-native";
 import { MatchRow } from "../components/match";
+import { GoalCounter } from "../components/goal_counter";
 
 interface TeamRef {
     id: number;
@@ -46,6 +47,7 @@ export default function Index() {
             <MatchRow key={f.id} fixture={f} onPress={(id) => console.log(id)}/>
           )
       )}
+      <GoalCounter />
     </View>
     );
 }

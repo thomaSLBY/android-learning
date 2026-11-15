@@ -672,7 +672,10 @@ Les props sont **en lecture seule**. Les données descendent (parent → enfant)
 import { useState } from "react";
 
 export function Counter() {
-  const [count, setCount] = useState(0);         // valeur + setter
+  const [count, setCount] = useState(0);
+  // valeur + setter
+  // 0: initial value
+
   return (
     <Pressable onPress={() => setCount((c) => c + 1)}>
       <Text>Buts : {count}</Text>
@@ -686,6 +689,7 @@ Cette fonction incrémente le nombre de buts à chaque fois que le bouton est pr
 - Appeler `setCount` **re-exécute** la fonction du composant (un *render*) avec la nouvelle valeur.
 - Jamais de mutation directe : `list.push(x)` ne déclenche rien. Fais `setList((cur) => [...cur, x])`.
 - Utilise la forme fonctionnelle `set(cur => ...)` quand la nouvelle valeur dépend de l'ancienne.
+- Une fonction peut avoir plusieurs boutons donc plusieurs states.
 
 Exemple réel dans FVA (`src/app/(tabs)/index.tsx`) :
 ```tsx
