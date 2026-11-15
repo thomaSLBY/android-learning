@@ -713,7 +713,7 @@ Ici on a choisi de stocker dans le Set `collapsed` les éléments fermés, mais 
 ### 3.5 Effets : `useEffect`
 
 Pour synchroniser avec l'extérieur (timer, abonnement, log), ici `setInterval` est extérieur à React puisque c'est une fonction JS.
-L'effet **n'**est **pas** utilisé pour charger des données (on utilisera React Query).
+L'effet **n'est pas** utilisé pour charger des données (on utilisera React Query).
 
 ```tsx
 useEffect(() => {
@@ -723,10 +723,10 @@ useEffect(() => {
 ```
 
 Ce code crée un chronomètre qui augmente à chaque seconde, et lorsqu'on quitte le composant, on arrête le compteur pour éviter qu'il continue inutilement.
-`useEffect` est un Hook React. Il permet d'exécuter du code qui interagit avec quelque chose d'extérieur au rendu React.
+`useEffect` est aussi un Hook React, à importer comme pour `useState`. Il permet d'exécuter du code qui interagit avec quelque chose d'extérieur au rendu React.
 Le tableau vide `[]` signifie que l'effet doit être exécuté après le premier rendu du composant, sans être relancé à chaque nouveau rendu.
 `setInterval` est une fonction JS pour répéter une action à intervalles de temps réguliers (ici toutes les 1000 millisecondes, donc toutes les 1 seconde). Elle retourne un identifiant, `id`, pour pouvoir arrêter le timer plus tard.
-`return () => clearInterval(id);`: fonction de nettoyage pour arrêter le timer identifié par `id`. Elle intervient au démontage du composant, i.e. quand il est retiré de l'interface.
+`return () => clearInterval(id);`: fonction de nettoyage **pour arrêter définitivement** le timer identifié par `id`. Elle intervient au démontage du composant, i.e. quand il est retiré de l'interface.
 
 ### 3.6 Valeurs dérivées : `useMemo`
 
