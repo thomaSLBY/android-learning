@@ -1,9 +1,20 @@
 // No async needed, because only operations are done: no waiting task (e.g. live status of a match).
 function minuteLabel(minute: number, status?: string): string {
-    return status === "1H" ? minute <= "45" ? String(minute) : "45+"+(minute-45)
-    : status === "HT" ? "MT"
-    : status === "2H" ? minute <= "90" ? String(minute) : "90+"+(minute-90)
-    : status === "FT" ? "FT" : "undefined"
+    switch (status) {
+        case "HT":
+            return "MT";
+        case "FT":
+            return "FT";
+        case "1H":
+            if (minute <= "45") return String(minute)
+            else return "45+"+(minute-45)
+        case "2H":
+            if (minute <= "90") return String(minute)
+            else return "90+"+(minute-90)
+        default:
+            "undefined";
+
+    }
 }
 
 console.log("45'", minuteLabel(45, "1H"));

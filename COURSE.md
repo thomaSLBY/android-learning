@@ -482,7 +482,7 @@ const NoteBody = z.object({
   text: z.string().trim().max(2000),
   minute: z.number().int().nullable().optional(),
   labels: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
-}).refine((n) => n.text.length > 0 || (n.labels?.length ?? 0) > 0, {   // règle sur plusieurs champs
+}).refine((n) => n.text.length > 0 || (n.labels?.length ?? 0) > 0, {   // règle personnalisée : rejette les données si conditions non respectées.
   message: "text or labels required",
 });
 
@@ -514,7 +514,8 @@ Lance l'API simulée pour les exercices 2.4 et 2.5.
 
 **Ex 2.6** — `minute.ts` : écris `minuteLabel(minute: number, status?: string): string` qui renvoie `"67'"`, mais `"45+2'"` si `status === "1H"` et `minute === 47`, `"90+4'"` en 2ᵉ mi-temps au-delà de 90, et `"MT"` à la mi-temps (`"HT"`). Teste au moins 6 cas avec `console.log`.
 
-**Ex 2.7** — `npm i zod` dans `playground-ts/`. Écris le schéma `NoteBody` de la section 2.8, puis valide 4 objets : un avec texte, un avec seulement `labels`, un vide (`{ text: "" }`), un avec 9 étiquettes. Affiche `parsed.success` et les messages d'erreur.
+**Ex 2.7** — Pour installer la library Zod, lance `npm i zod` dans `playground-ts/`. Zod permet de valider les données pour vérifier qu'elles respectent une structure précise.
+Écris le schéma `NoteBody` de la section 2.8, puis valide 4 objets : un avec texte, un avec seulement `labels`, un vide (`{ text: "" }`), un avec 9 étiquettes. Affiche `parsed.success` et les messages d'erreur.
 
 <details><summary>Corrigé Ex 2.2</summary>
 
