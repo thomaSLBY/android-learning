@@ -646,7 +646,9 @@ Règles JSX :
 ```tsx
 interface MatchRowProps {
   fixture: Fixture;
-  onPress?: (id: number) => void;   // callback : l'enfant remonte un évènement au parent
+  onPress?: (id: number) => void;
+  // => void : ne renvoie aucune valeur utile.
+  // onPress est une fonction de rappel, un callback : l'enfant remonte un évènement au parent
 }
 
 export function MatchRow({ fixture, onPress }: MatchRowProps) {
@@ -679,6 +681,8 @@ export function Counter() {
 }
 ```
 
+Cette fonction incrémente le nombre de buts à chaque fois que le bouton est pressé.
+
 - Appeler `setCount` **re-exécute** la fonction du composant (un *render*) avec la nouvelle valeur.
 - Jamais de mutation directe : `list.push(x)` ne déclenche rien. Fais `setList((cur) => [...cur, x])`.
 - Utilise la forme fonctionnelle `set(cur => ...)` quand la nouvelle valeur dépend de l'ancienne.
@@ -694,9 +698,18 @@ const toggle = (id: number) =>
   });
 ```
 
+Ce code permet de plier et déplier des éléments individuellement. Ici on a un `Set<number>`, donc un ensemble de nombres uniques pour mémoriser les idenfitiants des éléments qui sont pliés (i.e. fermés).
+`toggle` signifie inverser l'état actuel (e.g. lorsqu'on clique sur un bouton): quand l'élément  est plié (fermé), on le déplie en affichant son contenu.
+`.has(id) === true`: l'identifiant est présent dans le Set, donc l'élément est plié (fermé), son contenu est masqué.
+`.has(id) === false`: l'dientifiant n'est pas dans le Set, donc l'élément est déplié (ouvert), et son contenu est affiché.
+
+Le Set contient des identifiants d'éléments **fermés** (pliés). Il permet donc de savoir **quels éléments doivent avoir leur contenu masqué**.
+Ici on a choisi de stocker dans le Set `collapsed` les éléments fermés, mais on aurait très bien pu stocker les id des éléments ouverts (Set `expanded`). Mais on considère par défaut tous les éléments ouverts.
+
 ### 3.5 Effets : `useEffect`
 
-Pour synchroniser avec l'extérieur (timer, abonnement, log). **Pas** pour charger des données (on utilisera React Query).
+Pour synchroniser avec l'extérieur (timer, abonnement, log), ici `setInterval` est extérieur à React puisque c'est une fonction JS.
+L'effet **n'**est **pas** utilisé pour charger des données (on utilisera React Query).
 
 ```tsx
 useEffect(() => {
@@ -705,6 +718,12 @@ useEffect(() => {
 }, []);                              // tableau de dépendances : [] = au montage seulement
 ```
 
+Ce code crée un chronomètre qui augmente à chaque seconde, et lorsqu'on quitte le composant, on arrête le compteur pour éviter qu'il continue inutilement.
+`useEffect` est un Hook React. Il permet d'exécuter du code qui interagit avec quelque chose d'extérieur au rendu React.
+Le tableau vide `[]` signifie que l'effet doit être exécuté après le premier rendu du composant, sans être relancé à chaque nouveau rendu.
+`setInterval` est une fonction JS pour répéter une action à intervalles de temps réguliers (ici toutes les 1000 millisecondes, donc toutes les 1 seconde). Elle retourne un identifiant, `id`, pour pouvoir arrêter le timer plus tard.
+`return () => clearInterval(id);`: fonction de nettoyage pour arrêter le timer identifié par `id`. Elle intervient au démontage du composant, i.e. quand il est retiré de l'interface.
+
 ### 3.6 Valeurs dérivées : `useMemo`
 
 Ne stocke pas en state ce qui peut être **calculé** depuis le state ou les props (comme une vue SQL vs une table dupliquée).
@@ -712,6 +731,8 @@ Ne stocke pas en state ce qui peut être **calculé** depuis le state ou les pro
 ```tsx
 const liveCount = useMemo(() => fixtures.filter(isLive).length, [fixtures]);
 ```
+
+`useMemo` est un autre Hook React. Son but est d'effectuer une action dans la recalculer inutilement à chaque rendu du composant. Il **mémorise le résultat d'un calcul** pour éviter de le refaire inutilement. Il prend 2 arguments : un calcul et des dépendances qui permettent de déterminer **quand refaire le calcul** : seulement quand la référence de ces dépendances change.
 
 ### Exercices (dans `mini-fva/`)
 
