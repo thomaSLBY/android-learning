@@ -2,6 +2,7 @@ import { Text, View, StyleSheet } from "react-native";
 import { MatchRow } from "../components/match";
 import { GoalCounter } from "../components/goal_counter";
 import { MatchClock } from "../components/chrono";
+import { LiveCount } from "../components/live";
 
 interface TeamRef {
     id: number;
@@ -13,44 +14,49 @@ interface Fixture {
     id: number;
     home: TeamRef;
     away: TeamRef;
+    status: "Not started" | "First half" | "Second half" | "Extra time" | "Penalty kickoff" | "Finished";
     score: { home: number | null; away: number | null };
-    isLive: boolean;
 }
 
 export default function Index() {
-    const fs: Fixture[] = [
+    const fixtures: Fixture[] = [
         {
           id: 12,
           home: { id: 1, name: "Paris SG" },
           away: { id: 2, name: "Lyon" },
+          status: "First half",
           score: { home: 1, away: 2},
-          isLive: true,
         },
         {
           id: 43,
           home: { id: 4, name: "Paris FC" },
           away: { id: 3, name: "Rennes" },
           score: { home: 4, away: 3},
-          isLive: false,
+          status: "Second half",
         },
         {
           id: 13,
           home: { id: 3, name: "Rennes" },
           away: { id: 5, name: "Lille" },
           score: { home: 1, away: 3},
-          isLive: true,
+          status: "Finished",
+        },
+        {
+          id: 32,
+          home: { id: 3, name: "Rennes" },
+          away: { id: 6, name: "Le Mans" },
+          score: { home: null, away: null},
+          status: "Not started",
         },
     ];
 
     return (
-    <View style={styles.container}>
-      {fs.map((f) =>(
-            <MatchRow key={f.id} fixture={f} onPress={(id) => console.log(id)}/>
-          )
-      )}
-      <GoalCounter/>
-      <MatchClock/>
-    </View>
+        <View style={styles.container}>
+            <LiveCount fixtures={fixtures}/>
+            <GoalCounter/>
+            <MatchClock/>
+
+        </View>
     );
 }
 

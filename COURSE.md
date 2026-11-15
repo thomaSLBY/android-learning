@@ -748,7 +748,7 @@ const liveCount = useMemo(() => fixtures.filter(isLive).length, [fixtures]);
 
 **Ex 3.4** — Crée un chronomètre de match (`MatchClock`) : démarre à 0', +1 toutes les secondes (accéléré), bouton pause/reprise. Nettoie bien l'intervalle.
 
-**Ex 3.5** — Liste de 6 fixtures en dur + filtre « Tous / En direct / Terminés » (state) ; le compteur affiché est dérivé avec `useMemo`.
+**Ex 3.5** — Créer une liste de 6 fixtures en dur. Ajouter un filtre pour afficher Tous les matchs / Les matchs en direct / Les matches terminés ». Ajouter un compteur se mettant automatiquement à jour avec `useMemo`.
 
 <details><summary>Corrigé Ex 3.4</summary>
 
